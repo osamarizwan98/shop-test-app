@@ -7,6 +7,16 @@ datasource db {
   url      = "file:dev.sqlite"
 }
 
+enum BundleStatus {
+  active
+  inactive
+}
+
+enum DiscountType {
+  percentage
+  fixed_amount
+}
+
 model Session {
   id                  String    @id
   shop                String
@@ -28,13 +38,40 @@ model Session {
 }
 
 model Bundle {
-  id       String   @id
-  shop     String
-  title    String
-  status   String   @default("active")
-  discountType String
+  id            String       @id @default(uuid())
+  shop          String
+  title         String
+  status        BundleStatus @default(active)
+  discountType  DiscountType
   discountValue Float
-  productIds String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  productIds    Json
+  totalSales    Float        @default(0)
+  totalRevenue  Float        @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([shop])
+}
+
+model Analytics {
+  id               String   @id @default(uuid())
+  shop             String   @unique
+  totalBundleSales Float    @default(0)
+  totalRevenue     Float    @default(0)
+  totalSavings     Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([shop])
+}
+
+model InventoryAnalysis {
+  id           String   @id @default(uuid())
+  shop         String
+  productId    String
+  lastSoldDate DateTime?
+  stockLevel   Int
+  isStagnant   Boolean  @default(false)
+
+  @@index([shop])
 }
