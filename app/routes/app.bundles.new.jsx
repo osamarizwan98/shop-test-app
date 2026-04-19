@@ -3,6 +3,7 @@ import { useLoaderData, useActionData, useNavigation, Form } from 'react-router'
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import { syncBundlesToShopify, checkProductCollisions } from '../utils/bundleSync.js';
+import { registerSmartBundleDiscount } from '../services/discountService.server.js';
 
 async function syncActiveBundlesMetafield({ admin, shop }) {
   return await syncBundlesToShopify(admin, shop);
@@ -133,6 +134,29 @@ export async function action({ request }) {
         bundleId: bundle.id,
         syncFailed: true,
       };
+    }
+
+    // Register SmartBundle AI discount function if not already registered
+    // Function ID must be obtained from shopify.app.toml
+    const functionId = process.env.SHOPIFY_DISCOUNT_FUNCTION_ID;
+
+    if (!functionId) {
+      console.warn('SHOPIFY_DISCOUNT_FUNCTION_ID not set. Discount function not registered.');
+    } else {
+      try {
+        const discountResult = await registerSmartBundleDiscount(admin, functionId);
+
+        if (!discountResult.success && !discountResult.duplicate) {
+          console.error('Discount registration failed:', discountResult.error);
+          // Don't fail the bundle creation, just log the discount error
+          console.warn('Bundle created successfully, but discount registration failed. Please register the discount manually from Shopify Admin.');
+        } else if (discountResult.success) {
+          console.log('SmartBundle AI discount registered:', discountResult.discountId);
+        }
+      } catch (discountError) {
+        console.error('Error registering discount:', discountError);
+        // Don't fail the bundle creation if discount registration has an unexpected error
+      }
     }
 
     // Return success with redirect signal
