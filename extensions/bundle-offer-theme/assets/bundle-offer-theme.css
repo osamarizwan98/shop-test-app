@@ -1,0 +1,98 @@
+.SB_BUNDLE_CARD {
+  border: 1px solid;
+  border-radius: 1.25rem;
+  padding: 1.4rem;
+  font-family: var(--font-body, system-ui, sans-serif);
+  max-width: 100%;
+}
+
+.SB_BUNDLE_CARD_HEADER {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.SB_BUNDLE_CARD_TITLE {
+  margin: 0 0 0.4rem;
+  line-height: 1.2;
+}
+
+.SB_BUNDLE_CARD_BADGE {
+  color: #ffffff;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.SB_BUNDLE_CARD_DESCRIPTION {
+  margin: 0 0 1rem;
+  line-height: 1.6;
+}
+
+.SB_BUNDLE_CARD_SAVINGS {
+  margin: 0 0 1rem;
+  font-weight: 700;
+}
+
+.SB_BUNDLE_CARD_PRODUCT_LIST {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.SB_BUNDLE_CARD_PRODUCT_ITEM {
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0.9rem;
+}
+
+.SB_BUNDLE_CARD_PRODUCT_TITLE {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.SB_BUNDLE_CARD_PRODUCT_META {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(17, 17, 17, 0.72);
+}
+
+.SB_BUNDLE_CARD_ACTION {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 1rem 1.2rem;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.SB_BUNDLE_CARD_ACTION:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(47, 128, 237, 0.18);
+}
+
+.SB_BUNDLE_CARD_ACTION[disabled] {
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+  box-shadow: none;
+}
+
+.SB_BUNDLE_CARD_NOTICE {
+  margin: 0.85rem 0 0;
+  font-size: 0.95rem;
+  color: rgba(17, 17, 17, 0.72);
+}

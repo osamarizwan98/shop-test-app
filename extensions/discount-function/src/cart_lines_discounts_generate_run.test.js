@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ProductDiscountSelectionStrategy } from "../generated/api";
 import { cartLinesDiscountsGenerateRun } from "./cart_lines_discounts_generate_run";
+
+const PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST = "FIRST";
 
 describe("cartLinesDiscountsGenerateRun", () => {
   const baseInput = {
@@ -113,7 +114,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
             },
           },
         ],
-        selectionStrategy: ProductDiscountSelectionStrategy.First,
+        selectionStrategy: PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST,
       },
     });
   });
@@ -189,7 +190,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
             },
           },
         ],
-        selectionStrategy: ProductDiscountSelectionStrategy.First,
+        selectionStrategy: PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST,
       },
     });
   });

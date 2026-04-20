@@ -1,0 +1,9 @@
+{
+  "smart_bundle": {
+    "notice": "The product discount function applies when the full bundle is added together.",
+    "current_product": "Current product included in bundle",
+    "bundle_item": "Bundle item",
+    "missing_variant": "Quick add is unavailable until bundle products include variant data.",
+    "add_to_complete": "Add this product to complete the smart bundle"
+  }
+}

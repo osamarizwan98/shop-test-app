@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useFetcher, useLoaderData } from 'react-router';
+import { useEffect, useMemo } from 'react';
+import { isRouteErrorResponse, useFetcher, useLoaderData, useRouteError } from 'react-router';
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import { AnalyticsService } from '../services/analytics.server.js';
@@ -21,6 +21,16 @@ function formatDiscount(bundle) {
   return `$${Number(bundle.discountValue || 0).toFixed(2)}`;
 }
 
+function toSafeNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function toSafeCount(value) {
+  const numeric = Math.floor(toSafeNumber(value));
+  return numeric > 0 ? numeric : 0;
+}
+
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
 
@@ -29,14 +39,49 @@ export async function loader({ request }) {
   }
 
   try {
-    const bundles = await prisma.bundle.findMany({
-      where: {
-        shop: session.shop,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const bundleWhere = { shop: session.shop };
+    const [bundleCount, latestBundle] = await Promise.all([
+      prisma.bundle.count({ where: bundleWhere }),
+      prisma.bundle.findFirst({
+        where: bundleWhere,
+        orderBy: { updatedAt: 'desc' },
+        select: { updatedAt: true },
+      }),
+    ]);
+
+    const cacheVersion = latestBundle?.updatedAt?.toISOString() || '0';
+    const etag = `W/"sb-bundles:${session.shop}:${bundleCount}:${cacheVersion}"`;
+    const requestEtag = request.headers.get('if-none-match');
+
+    if (requestEtag === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
+          ETag: etag,
+        },
+      });
+    }
+
+    const [bundles, analyticsRaw] = await Promise.all([
+      prisma.bundle.findMany({
+        where: bundleWhere,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          discountType: true,
+          discountValue: true,
+          productIds: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      AnalyticsService.getAnalytics(session.shop),
+    ]);
 
     const plainBundles = bundles.map((bundle) => ({
       id: bundle.id,
@@ -52,10 +97,11 @@ export async function loader({ request }) {
     const activeBundles = plainBundles.filter((bundle) => bundle.status === 'active').length;
     const inactiveBundles = plainBundles.filter((bundle) => bundle.status === 'inactive').length;
 
-    // Fetch analytics data
-    const analytics = await AnalyticsService.getAnalytics(session.shop);
+    const safeRevenue = Number(toSafeNumber(analyticsRaw?.totalRevenue).toFixed(2));
+    const safeSavings = Number(toSafeNumber(analyticsRaw?.totalSavings).toFixed(2));
+    const safeBundleSales = toSafeCount(analyticsRaw?.totalBundleSales);
 
-    return {
+    const payload = {
       bundles: plainBundles,
       stats: {
         totalBundles: plainBundles.length,
@@ -63,22 +109,31 @@ export async function loader({ request }) {
         inactiveBundles,
       },
       analytics: {
-        totalBundleSales: analytics.totalBundleSales,
-        totalRevenue: analytics.totalRevenue,
-        totalSavings: analytics.totalSavings,
+        totalBundleSales: safeBundleSales,
+        totalRevenue: safeRevenue,
+        totalSavings: safeSavings,
+        lastUpdatedAt: new Date().toISOString(),
       },
     };
+
+    return new Response(JSON.stringify(payload), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
+        ETag: etag,
+      },
+    });
   } catch (error) {
     console.error('Error loading bundle dashboard:', error);
-    return {
-      bundles: [],
-      stats: {
-        totalBundles: 0,
-        activeBundles: 0,
-        inactiveBundles: 0,
+    throw new Response(JSON.stringify({
+      message: 'Failed to load bundle dashboard.',
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
       },
-      error: 'Failed to load bundle dashboard.',
-    };
+    });
   }
 }
 
@@ -203,10 +258,61 @@ export async function action({ request }) {
   }
 }
 
+function formatCurrency(value) {
+  return `$${toSafeNumber(value).toFixed(2)}`;
+}
+
+function formatTimestamp(value) {
+  if (!value) {
+    return 'Just now';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Just now';
+  }
+
+  return date.toLocaleString();
+}
+
+function renderSBStatCard({ key, label, value, icon, emphasizeValue = false }) {
+  return (
+    <article key={key} className="SB_stat-card SB_stat-card--analytics">
+      <span className="SB_stat-icon" aria-hidden="true">{icon}</span>
+      <span className="SB_stat-label">{label}</span>
+      <strong className={`SB_stat-value ${emphasizeValue ? 'SB_stat_value' : ''}`}>{value}</strong>
+    </article>
+  );
+}
+
 export default function AppIndex() {
-  const { bundles, stats, analytics, error } = useLoaderData();
+  const { bundles, stats, analytics } = useLoaderData();
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== 'idle';
+
+  const analyticsCards = useMemo(() => ([
+    {
+      key: 'revenue',
+      label: 'Bundle Revenue',
+      value: formatCurrency(analytics?.totalRevenue),
+      icon: '$',
+      emphasizeValue: true,
+    },
+    {
+      key: 'sales',
+      label: 'Bundle Sales',
+      value: `${toSafeCount(analytics?.totalBundleSales)}`,
+      icon: '#',
+      emphasizeValue: false,
+    },
+    {
+      key: 'savings',
+      label: 'Customer Savings',
+      value: formatCurrency(analytics?.totalSavings),
+      icon: '%',
+      emphasizeValue: false,
+    },
+  ]), [analytics?.totalBundleSales, analytics?.totalRevenue, analytics?.totalSavings]);
 
   useEffect(() => {
     if (!fetcher.data) {
@@ -236,7 +342,7 @@ export default function AppIndex() {
   };
 
   return (
-    <div className="SB_dashboard">
+    <div className="SB_admin_container SB_dashboard">
       <div className="SB_header">
         <div>
           <h1 className="SB_dashboard-title">Bundle Management</h1>
@@ -244,7 +350,7 @@ export default function AppIndex() {
             View bundle performance, toggle availability, and keep Shopify metafields synced in real time.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div className="SB_headerActions">
           <fetcher.Form method="post">
             <button
               type="submit"
@@ -264,26 +370,15 @@ export default function AppIndex() {
         </div>
       </div>
 
-      {error ? (
-        <div className="SB_banner SB_banner-error">
-          <p className="SB_bannerText">{error}</p>
+      <section className="SB_analytics_section">
+        <div className="SB_analytics_header">
+          <h2 className="SB_section-title Polaris-Text--headingLg">Bundle Analytics</h2>
+          <p className="SB_section-note">Last updated: {formatTimestamp(analytics?.lastUpdatedAt)}</p>
         </div>
-      ) : null}
-
-      <div className="SB_stats-grid">
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Total Revenue</span>
-          <strong className="SB_stat-value">${analytics.totalRevenue.toFixed(2)}</strong>
-        </article>
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Bundle Sales</span>
-          <strong className="SB_stat-value">{analytics.totalBundleSales}</strong>
-        </article>
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Total Savings</span>
-          <strong className="SB_stat-value">${analytics.totalSavings.toFixed(2)}</strong>
-        </article>
-      </div>
+        <div className="SB_analytics_grid">
+          {analyticsCards.map((card) => renderSBStatCard(card))}
+        </div>
+      </section>
 
       <div className="SB_stats-grid">
         <article className="SB_stat-card">
@@ -303,22 +398,26 @@ export default function AppIndex() {
       <section className="SB_section">
         <div className="SB_section-header">
           <div>
-            <h2 className="SB_section-title">Your bundles</h2>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '8px 0 0 0' }}>
+            <h2 className="SB_section-title Polaris-Text--headingLg">Your bundles</h2>
+            <p className="SB_section-note">
               Any status or delete action immediately refreshes the synced `active_bundles` metafield.
             </p>
           </div>
         </div>
 
         {bundles.length === 0 ? (
-          <div className="SB_empty-state">
-            <p className="SB_empty-title">No bundles created yet.</p>
-            <p className="SB_empty-description">
-              Create your first bundle to start syncing automatic discount rules to Shopify.
-            </p>
-            <a href="/app/bundles/new" className="SB_primaryButton">
-              Create first bundle
-            </a>
+          <div className="SB_empty_state_wrapper">
+            <div className="Polaris-EmptyState">
+              <div className="Polaris-EmptyState__Section">
+                <p className="Polaris-Text--headingMd">No bundles created yet</p>
+                <p className="Polaris-Text--bodyMd SB_empty-description">
+                  Create your first bundle to start syncing automatic discount rules to Shopify.
+                </p>
+                <a href="/app/bundles/new" className="SB_primaryButton">
+                  Create first bundle
+                </a>
+              </div>
+            </div>
           </div>
         ) : (
           <div>
@@ -343,8 +442,8 @@ export default function AppIndex() {
                     <tr key={bundle.id}>
                       <td>
                         <div>
-                          <strong style={{ fontSize: '0.875rem', color: '#1a202c' }}>{bundle.title}</strong>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
+                          <strong className="SB_bundleTitle">{bundle.title}</strong>
+                          <div className="SB_bundleMeta">
                             Updated {new Date(bundle.updatedAt).toLocaleDateString()}
                           </div>
                         </div>
@@ -365,7 +464,6 @@ export default function AppIndex() {
                             value="TOGGLE_STATUS"
                             className="SB_secondaryButton"
                             disabled={isPending}
-                            style={{ padding: '8px 16px', fontSize: '0.75rem' }}
                           >
                             {isPending && fetcher.formData?.get('intent') === 'TOGGLE_STATUS'
                               ? 'Saving...'
@@ -394,6 +492,35 @@ export default function AppIndex() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  let errorMessage = 'Something went wrong while loading SmartBundle AI.';
+
+  if (isRouteErrorResponse(error)) {
+    errorMessage = error?.data?.message || error.statusText || errorMessage;
+  } else if (error instanceof Error) {
+    errorMessage = error.message;
+  }
+
+  return (
+    <div className="SB_admin_container SB_dashboard">
+      <div className="SB_empty_state_wrapper SB_error_boundary">
+        <div className="SB_banner SB_banner-error">
+          <p className="SB_empty-title">Something went wrong</p>
+          <p className="SB_empty-description">{errorMessage}</p>
+          <button
+            type="button"
+            className="SB_primaryButton"
+            onClick={() => window.location.reload()}
+          >
+            Refresh page
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

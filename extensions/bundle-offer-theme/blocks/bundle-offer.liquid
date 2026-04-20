@@ -17,6 +17,7 @@
   assign current_product_numeric = product.id | append: ''
   assign current_product_gid = current_product_numeric | prepend: 'gid://shopify/Product/'
   assign matched_bundle = blank
+  assign quick_add_available = true
 %}
 
 {% if can_render_bundle_offer %}
@@ -41,158 +42,81 @@
 {% endif %}
 
 {% if matched_bundle != blank %}
-  {% capture bundle_items_data %}
-    [{% for bundle_item in matched_bundle.products %}
-      {
-        "productId": {{ bundle_item.id | default: bundle_item | json }},
-        "variantId": {{ bundle_item.variant_id | default: bundle_item.variantId | default: '' | json }},
-        "title": {{ bundle_item.title | default: '' | json }},
-        "handle": {{ bundle_item.handle | default: '' | json }},
-        "price": {{ bundle_item.price | default: '' | json }}
-      }{% unless forloop.last %},{% endunless %}
-    {% endfor %}]
+  {% capture variant_ids_string %}
+    {% for bundle_item in matched_bundle.products %}
+      {% assign resolved_variant_id = bundle_item.variant_id | default: bundle_item.variantId | default: '' %}
+
+      {% if resolved_variant_id == blank and bundle_item.handle != blank %}
+        {% assign bundle_product = all_products[bundle_item.handle] %}
+        {% if bundle_product != blank and bundle_product.variants != blank and bundle_product.variants.size > 0 %}
+          {% assign resolved_variant_id = bundle_product.selected_or_first_available_variant.id | default: bundle_product.variants.first.id %}
+        {% endif %}
+      {% endif %}
+
+      {% if resolved_variant_id == blank %}
+        {% assign quick_add_available = false %}
+      {% else %}
+        {% assign resolved_variant_id = resolved_variant_id | append: '' %}
+        {% if resolved_variant_id contains 'gid://shopify/ProductVariant/' %}
+          {% assign resolved_variant_id = resolved_variant_id | split: '/' | last %}
+        {% endif %}
+      {% endif %}
+
+      {% if resolved_variant_id != blank %}
+        {{ resolved_variant_id }}{% unless forloop.last %},{% endunless %}
+      {% endif %}
+    {% endfor %}
   {% endcapture %}
 
-  {% assign total_bundle_value = 0 %}
-  {% for bundle_item in matched_bundle.products %}
-    {% assign item_price = bundle_item.price | default: 0 | plus: 0 %}
-    {% assign total_bundle_value = total_bundle_value | plus: item_price %}
-  {% endfor %}
+  {% capture variant_titles_string %}
+    {% for bundle_item in matched_bundle.products %}
+      {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id %}
+      {{ item_title }}{% unless forloop.last %}|~|{% endunless %}
+    {% endfor %}
+  {% endcapture %}
 
   {% assign discount_type = matched_bundle.discountType | default: matched_bundle.type | default: 'percentage' %}
   {% assign discount_value = matched_bundle.discountValue | default: matched_bundle.value | default: 0 | plus: 0 %}
-
-  {% if discount_type == 'percentage' %}
-    {% assign savings_amount = total_bundle_value | times: discount_value | divided_by: 100 %}
-  {% else %}
-    {% assign savings_amount = discount_value %}
-  {% endif %}
-
-  {% assign formatted_savings = savings_amount | money %}
   {% assign offer_label = block.settings.heading | default: 'SmartBundle AI recommendation' %}
   {% assign body_text = block.settings.body_text | default: 'Add the full bundle to your cart to unlock the automatic discount immediately.' %}
   {% assign badge_text = block.settings.badge_text | default: 'Limited Time Offer' %}
   {% assign button_label = block.settings.button_text | default: 'Quick Add Bundle' %}
+  {% assign bundle_item_count = matched_bundle.products.size %}
+
+  {% if discount_type == 'percentage' %}
+    {% capture formatted_savings %}{{ discount_value }}% off{% endcapture %}
+  {% else %}
+    {% assign formatted_savings = discount_value | money %}
+  {% endif %}
 {% endif %}
 
 {% if matched_bundle != blank %}
-  <aside {{ block.shopify_attributes }} class="SB_BUNDLE_CARD" style="background: {{ block.settings.card_background_color | default: '#ffffff' }}; border-color: {{ block.settings.border_color | default: '#dbe4ef' }}; color: var(--color-base-text, #111111);">
-    <style>
-      .SB_BUNDLE_CARD {
-        border: 1px solid;
-        border-radius: 1.25rem;
-        padding: 1.4rem;
-        font-family: var(--font-body, system-ui, sans-serif);
-        max-width: 100%;
-      }
-
-      .SB_BUNDLE_CARD_HEADER {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        align-items: flex-start;
-        margin-bottom: 1rem;
-      }
-
-      .SB_BUNDLE_CARD_TITLE {
-        margin: 0 0 0.4rem;
-        font-size: {{ block.settings.heading_font_size | default: 22 }}px;
-        line-height: 1.2;
-      }
-
-      .SB_BUNDLE_CARD_BADGE {
-        background: {{ block.settings.accent_color | default: '#2f80ed' }};
-        color: #ffffff;
-        padding: 0.45rem 0.85rem;
-        border-radius: 999px;
-        font-size: 0.78rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-
-      .SB_BUNDLE_CARD_DESCRIPTION {
-        margin: 0 0 1rem;
-        font-size: {{ block.settings.text_font_size | default: 16 }}px;
-        line-height: 1.6;
-      }
-
-      .SB_BUNDLE_CARD_SAVINGS {
-        margin: 0 0 1rem;
-        font-size: {{ block.settings.text_font_size | default: 16 }}px;
-        font-weight: 700;
-      }
-
-      .SB_BUNDLE_CARD_PRODUCT_LIST {
-        list-style: none;
-        margin: 0 0 1.25rem;
-        padding: 0;
-        display: grid;
-        gap: 0.85rem;
-      }
-
-      .SB_BUNDLE_CARD_PRODUCT_ITEM {
-        padding: 0.95rem 1rem;
-        border: 1px solid rgba(0,0,0,0.05);
-        background: rgba(255,255,255,0.9);
-        border-radius: 0.9rem;
-      }
-
-      .SB_BUNDLE_CARD_PRODUCT_TITLE {
-        margin: 0 0 0.35rem;
-        font-size: 1rem;
-        font-weight: 700;
-      }
-
-      .SB_BUNDLE_CARD_PRODUCT_META {
-        margin: 0;
-        font-size: 0.95rem;
-        color: rgba(17,17,17,0.72);
-      }
-
-      .SB_BUNDLE_CARD_ACTION {
-        width: 100%;
-        border: 0;
-        border-radius: 999px;
-        padding: 1rem 1.2rem;
-        background: {{ block.settings.accent_color | default: '#2f80ed' }};
-        color: #ffffff;
-        font-size: 1rem;
-        font-weight: 700;
-        text-align: center;
-        cursor: pointer;
-        transition: transform 180ms ease, box-shadow 180ms ease;
-      }
-
-      .SB_BUNDLE_CARD_ACTION:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 16px 32px rgba(47, 128, 237, 0.18);
-      }
-
-      .SB_BUNDLE_CARD_NOTICE {
-        margin: 0.85rem 0 0;
-        font-size: 0.95rem;
-        color: rgba(17,17,17,0.72);
-      }
-    </style>
-
+  <div class="SB_bundle_container">
+    <aside
+      {{ block.shopify_attributes }}
+      class="SB_BUNDLE_CARD SB_js_bundle_offer"
+      style="background: {{ block.settings.card_background_color | default: '#ffffff' }}; border-color: {{ block.settings.border_color | default: '#dbe4ef' }}; color: var(--color-base-text, #111111);"
+    >
     <div class="SB_BUNDLE_CARD_HEADER">
       <div>
-        <h2 class="SB_BUNDLE_CARD_TITLE">{{ offer_label }}</h2>
-        <p class="SB_BUNDLE_CARD_DESCRIPTION">{{ body_text }}</p>
+        <h2 class="SB_BUNDLE_CARD_TITLE" style="font-size: {{ block.settings.heading_font_size | default: 22 }}px;">{{ offer_label }}</h2>
+        <p class="SB_BUNDLE_CARD_DESCRIPTION" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">{{ body_text }}</p>
       </div>
-      <span class="SB_BUNDLE_CARD_BADGE">{{ badge_text }}</span>
+      <span class="SB_BUNDLE_CARD_BADGE" style="background: {{ block.settings.accent_color | default: '#2f80ed' }};">{{ badge_text }}</span>
     </div>
 
-    <p class="SB_BUNDLE_CARD_SAVINGS">
+    <p class="SB_BUNDLE_CARD_SAVINGS" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">
       {{ block.settings.success_prefix | default: 'Potential savings:' }} <span>{{ formatted_savings }}</span>
     </p>
 
     <ul class="SB_BUNDLE_CARD_PRODUCT_LIST">
       {% for bundle_item in matched_bundle.products %}
-        {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id | default: 'Bundle item' %}
+        {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id %}
         {% assign item_id = bundle_item.id | default: bundle_item | append: '' %}
         {% assign is_current_product = false %}
+        {% if item_title == blank %}
+          {% capture item_title %}{{ 'smart_bundle.bundle_item' | t }} {{ forloop.index }}{% endcapture %}
+        {% endif %}
         {% if item_id == current_product_gid %}
           {% assign is_current_product = true %}
         {% elsif item_id == current_product_numeric %}
@@ -202,91 +126,57 @@
           <p class="SB_BUNDLE_CARD_PRODUCT_TITLE">{{ item_title }}</p>
           <p class="SB_BUNDLE_CARD_PRODUCT_META">
             {% if is_current_product %}
-              Current product included in bundle
+              {{ 'smart_bundle.current_product' | t }}
             {% else %}
-              Add this product to complete the smart bundle
+              {{ 'smart_bundle.add_to_complete' | t }}
             {% endif %}
           </p>
         </li>
       {% endfor %}
     </ul>
 
-    <button type="button" class="SB_BUNDLE_CARD_ACTION js-sb-quick-add" data-bundle-items="{{ bundle_items_data | strip_newlines | escape }}">
-      {{ button_label }}
-    </button>
-    <p class="SB_BUNDLE_CARD_NOTICE">The product discount function applies when the full bundle is added together.</p>
+    {% if quick_add_available %}
+      <button
+        type="button"
+        class="SB_add_button SB_js_quick_add"
+        style="background: {{ block.settings.accent_color | default: '#2f80ed' }};"
+        data-sb-variants="{{ variant_ids_string | strip_newlines | strip | escape }}"
+        data-sb-variant-names="{{ variant_titles_string | strip_newlines | strip | escape }}"
+        data-default-text="{{ button_label | escape }}"
+        onclick="SB_addBundleToCartFromButton(this)"
+      >
+        {{ button_label }}
+      </button>
+      <div class="SB_error_message" role="alert" aria-live="assertive"></div>
+    {% else %}
+      <button
+        type="button"
+        class="SB_add_button SB_add_button--disabled"
+        disabled
+        aria-disabled="true"
+        style="background: #9ea8b6;"
+      >
+        {{ button_label }}
+      </button>
+      <div class="SB_error_message" role="alert" aria-live="assertive">Bundle currently unavailable</div>
+    {% endif %}
+
+    <p class="SB_BUNDLE_CARD_NOTICE">
+      {% if quick_add_available %}
+        {{ 'smart_bundle.notice' | t }}
+      {% elsif bundle_item_count > 1 %}
+        {{ 'smart_bundle.missing_variant' | t }}
+      {% endif %}
+    </p>
   </aside>
-
-  <script type="application/javascript">
-    (function () {
-      const quickAddButton = document.querySelector('.js-sb-quick-add');
-      if (!quickAddButton) return;
-
-      function parseBundleData(value) {
-        if (!value) return [];
-        try {
-          return JSON.parse(value);
-        } catch (error) {
-          console.error('SmartBundle AI: invalid bundle metadata', error);
-          return [];
-        }
-      }
-
-      function normalizeVariantId(value) {
-        const id = String(value || '').trim();
-        return id || null;
-      }
-
-      quickAddButton.addEventListener('click', async function () {
-        const bundleData = parseBundleData(quickAddButton.getAttribute('data-bundle-items'));
-        if (!bundleData.length) {
-          console.error('SmartBundle AI: no bundle items available for quick add.');
-          return;
-        }
-
-        const items = bundleData
-          .map((item) => ({
-            id: normalizeVariantId(item.variantId),
-            quantity: 1
-          }))
-          .filter((item) => item.id !== null);
-
-        if (!items.length) {
-          console.error('SmartBundle AI: bundle items do not contain valid variant IDs.');
-          return;
-        }
-
-        try {
-          const response = await fetch('/cart/add.js', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ items })
-          });
-
-          if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({}));
-            console.error('SmartBundle AI: /cart/add.js failed', errorBody);
-            return;
-          }
-
-          const data = await response.json();
-          window.dispatchEvent(new CustomEvent('sbBundleAdded', { detail: data }));
-          window.location.href = '/cart';
-        } catch (error) {
-          console.error('SmartBundle AI: quick add bundle failed', error);
-        }
-      });
-    })();
-  </script>
-{% endif %}
+  </div>
 
 {% schema %}
 {
-  "name": "Bundle offer",
+  "name": "t:blocks.bundle_offer.name",
   "target": "section",
+  "stylesheet": "bundle-offer-theme.css",
+  "javascript": "sb-logic.js",
   "enabled_on": {
     "templates": ["product"]
   },
@@ -294,55 +184,55 @@
     {
       "type": "text",
       "id": "heading",
-      "label": "Heading",
+      "label": "t:blocks.bundle_offer.settings.heading",
       "default": "SmartBundle AI recommendation"
     },
     {
       "type": "text",
       "id": "badge_text",
-      "label": "Badge text",
+      "label": "t:blocks.bundle_offer.settings.badge_text",
       "default": "Limited Time Offer"
     },
     {
       "type": "text",
       "id": "success_prefix",
-      "label": "Savings label",
+      "label": "t:blocks.bundle_offer.settings.success_prefix",
       "default": "Potential savings:"
     },
     {
       "type": "textarea",
       "id": "body_text",
-      "label": "Body text",
+      "label": "t:blocks.bundle_offer.settings.body_text",
       "default": "Add the full bundle to your cart to unlock the automatic discount immediately."
     },
     {
       "type": "text",
       "id": "button_text",
-      "label": "Button text",
+      "label": "t:blocks.bundle_offer.settings.button_text",
       "default": "Quick Add Bundle"
     },
     {
       "type": "color",
       "id": "card_background_color",
-      "label": "Card background color",
+      "label": "t:blocks.bundle_offer.settings.card_background_color",
       "default": "#ffffff"
     },
     {
       "type": "color",
       "id": "border_color",
-      "label": "Border color",
+      "label": "t:blocks.bundle_offer.settings.border_color",
       "default": "#dbe4ef"
     },
     {
       "type": "color",
       "id": "accent_color",
-      "label": "Accent color",
+      "label": "t:blocks.bundle_offer.settings.accent_color",
       "default": "#2f80ed"
     },
     {
       "type": "range",
       "id": "heading_font_size",
-      "label": "Heading font size",
+      "label": "t:blocks.bundle_offer.settings.heading_font_size",
       "default": 22,
       "min": 16,
       "max": 34,
@@ -352,7 +242,7 @@
     {
       "type": "range",
       "id": "text_font_size",
-      "label": "Text font size",
+      "label": "t:blocks.bundle_offer.settings.text_font_size",
       "default": 16,
       "min": 12,
       "max": 22,

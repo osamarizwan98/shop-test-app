@@ -1,21 +1,26 @@
-import {
-  DeliveryDiscountSelectionStrategy,
-  DiscountClass,
-} from "../generated/api";
+const DELIVERY_DISCOUNT_SELECTION_STRATEGY_ALL = "ALL";
+const SHIPPING_DISCOUNT_CLASS = "SHIPPING";
+
+const EMPTY_RESULT = {
+  operations: [],
+};
 
 // [START discount-function.run.delivery]
 export function cartDeliveryOptionsDiscountsGenerateRun(input) {
-  const firstDeliveryGroup = input.cart.deliveryGroups[0];
+  const deliveryGroups = input?.cart?.deliveryGroups ?? [];
+  const discountClasses = input?.discount?.discountClasses ?? [];
+  const firstDeliveryGroup = deliveryGroups[0];
+
   if (!firstDeliveryGroup) {
-    throw new Error("No delivery groups found");
+    return EMPTY_RESULT;
   }
 
-  const hasShippingDiscountClass = input.discount.discountClasses.includes(
-    DiscountClass.Shipping,
+  const hasShippingDiscountClass = discountClasses.includes(
+    SHIPPING_DISCOUNT_CLASS,
   );
 
   if (!hasShippingDiscountClass) {
-    return { operations: [] };
+    return EMPTY_RESULT;
   }
 
   return {
@@ -39,7 +44,7 @@ export function cartDeliveryOptionsDiscountsGenerateRun(input) {
               },
             },
           ],
-          selectionStrategy: DeliveryDiscountSelectionStrategy.All,
+          selectionStrategy: DELIVERY_DISCOUNT_SELECTION_STRATEGY_ALL,
         },
       },
     ],

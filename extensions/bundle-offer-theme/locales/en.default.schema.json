@@ -1,0 +1,19 @@
+{
+  "blocks": {
+    "bundle_offer": {
+      "name": "Bundle offer",
+      "settings": {
+        "heading": "Heading",
+        "badge_text": "Badge text",
+        "success_prefix": "Savings label",
+        "body_text": "Body text",
+        "button_text": "Button text",
+        "card_background_color": "Card background color",
+        "border_color": "Border color",
+        "accent_color": "Accent color",
+        "heading_font_size": "Heading font size",
+        "text_font_size": "Text font size"
+      }
+    }
+  }
+}

@@ -1,16 +1,9 @@
 import { describe, it, expect } from "vitest";
 
-import {
-  DeliveryDiscountSelectionStrategy,
-  DiscountClass,
-} from "../generated/api";
-
 import { cartDeliveryOptionsDiscountsGenerateRun } from "./cart_delivery_options_discounts_generate_run";
 
-/**
- * @typedef {import("../generated/api").CartDeliveryOptionsDiscountsGenerateRunResult} CartDeliveryOptionsDiscountsGenerateRunResult
- * @typedef {import("../generated/api").DeliveryInput} DeliveryInput
- */
+const DELIVERY_DISCOUNT_SELECTION_STRATEGY_ALL = "ALL";
+const SHIPPING_DISCOUNT_CLASS = "SHIPPING";
 
 describe("cartDeliveryOptionsDiscountsGenerateRun", () => {
   const baseInput = {
@@ -42,7 +35,7 @@ describe("cartDeliveryOptionsDiscountsGenerateRun", () => {
     const input = {
       ...baseInput,
       discount: {
-        discountClasses: [DiscountClass.Shipping],
+        discountClasses: [SHIPPING_DISCOUNT_CLASS],
       },
     };
 
@@ -67,23 +60,23 @@ describe("cartDeliveryOptionsDiscountsGenerateRun", () => {
             },
           },
         ],
-        selectionStrategy: DeliveryDiscountSelectionStrategy.All,
+        selectionStrategy: DELIVERY_DISCOUNT_SELECTION_STRATEGY_ALL,
       },
     });
   });
 
-  it("throws error when no delivery groups are present", () => {
+  it("returns empty operations when no delivery groups are present", () => {
     const input = {
       cart: {
         deliveryGroups: [],
       },
       discount: {
-        discountClasses: [DiscountClass.Shipping],
+        discountClasses: [SHIPPING_DISCOUNT_CLASS],
       },
     };
 
-    expect(() => cartDeliveryOptionsDiscountsGenerateRun(input)).toThrow(
-      "No delivery groups found",
-    );
+    expect(cartDeliveryOptionsDiscountsGenerateRun(input)).toEqual({
+      operations: [],
+    });
   });
 });

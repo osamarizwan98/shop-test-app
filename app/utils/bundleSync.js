@@ -43,15 +43,37 @@ export function formatActiveBundlesPayload(bundles) {
         }
 
         if (typeof product?.id === 'string') {
-          return product.id;
+          return {
+            id: product.id,
+            title: typeof product.title === 'string' ? product.title : '',
+            handle: typeof product.handle === 'string' ? product.handle : '',
+            variantId:
+              typeof product.variantId === 'string'
+                ? product.variantId
+                : typeof product?.variants?.[0]?.id === 'string'
+                  ? product.variants[0].id
+                  : '',
+            price:
+              typeof product.price === 'string' || typeof product.price === 'number'
+                ? product.price
+                : typeof product?.variants?.[0]?.price === 'string' || typeof product?.variants?.[0]?.price === 'number'
+                  ? product.variants[0].price
+                  : '',
+          };
         }
 
         return null;
       })
-      .filter((productId) => (
-        typeof productId === 'string' &&
-        productId.startsWith('gid://shopify/Product/')
-      ));
+      .filter((productId) => {
+        if (typeof productId === 'string') {
+          return productId.startsWith('gid://shopify/Product/');
+        }
+
+        return (
+          typeof productId?.id === 'string' &&
+          productId.id.startsWith('gid://shopify/Product/')
+        );
+      });
 
     return {
       id: bundle.id,

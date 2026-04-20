@@ -1,4 +1,4 @@
-import { ProductDiscountSelectionStrategy } from "../generated/api";
+const PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST = "FIRST";
 
 const EMPTY_RESULT = {
   operations: [],
@@ -41,7 +41,12 @@ function extractBundleItems(bundle) {
   const mergedItems = new Map();
 
   for (const rawItem of rawItems) {
-    const productId = typeof rawItem === "string" ? rawItem : null;
+    const productId =
+      typeof rawItem === "string"
+        ? rawItem
+        : typeof rawItem?.id === "string"
+          ? rawItem.id
+          : null;
 
     if (
       typeof productId !== "string" ||
@@ -250,7 +255,7 @@ export function cartLinesDiscountsGenerateRun(input) {
       {
         productDiscountsAdd: {
           candidates,
-          selectionStrategy: ProductDiscountSelectionStrategy.First,
+          selectionStrategy: PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST,
         },
       },
     ],

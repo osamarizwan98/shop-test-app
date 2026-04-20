@@ -3,13 +3,15 @@
  * Based on latest Shopify Admin API: https://shopify.dev/docs/api/admin-graphql/latest/mutations/discountAutomaticAppCreate
  */
 
+import { SMART_BUNDLE_DISCOUNT_TITLE } from '../constants/discounts.server.js';
+
 /**
  * Check if a 'SmartBundle AI' discount already exists
  * Prevents duplicate discount registration
  */
 export const QUERY_EXISTING_DISCOUNTS = `#graphql
   query getExistingSmartBundleDiscounts {
-    automaticDiscountNodes(first: 10, query: "title:SmartBundle AI") {
+    automaticDiscountNodes(first: 25, query: "title:'${SMART_BUNDLE_DISCOUNT_TITLE}'") {
       edges {
         node {
           id
@@ -68,7 +70,7 @@ export const CREATE_AUTOMATIC_APP_DISCOUNT = `#graphql
  * @param {object} options - Additional options (combinesWith, metafields, endsAt)
  * @returns {object} GraphQL mutation variables
  */
-export function buildDiscountVariables(functionId, title = "SmartBundle AI Discount", options = {}) {
+export function buildDiscountVariables(functionId, title = SMART_BUNDLE_DISCOUNT_TITLE, options = {}) {
   const now = new Date();
   const startsAt = now.toISOString();
 

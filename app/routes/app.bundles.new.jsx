@@ -3,10 +3,216 @@ import { useLoaderData, useActionData, useNavigation, Form } from 'react-router'
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import { syncBundlesToShopify, checkProductCollisions } from '../utils/bundleSync.js';
-import { registerSmartBundleDiscount } from '../services/discountService.server.js';
+import { validateBundleSubmission } from '../utils/bundleValidation.server.js';
+import {
+  getSmartBundleDiscountFunctionId,
+  MISSING_DISCOUNT_FUNCTION_ID_ERROR,
+  WRITE_DISCOUNTS_SCOPE_ERROR,
+} from '../constants/discounts.server.js';
 
 async function syncActiveBundlesMetafield({ admin, shop }) {
   return await syncBundlesToShopify(admin, shop);
+}
+
+const SMART_BUNDLE_AUTO_DISCOUNT_TITLE = 'SmartBundle AI Auto-Discount';
+const FALLBACK_FUNCTION_ID_PLACEHOLDER = '[PASTE_YOUR_UUID_HERE]';
+
+const QUERY_EXISTING_AUTO_DISCOUNT = `#graphql
+  query SmartBundleDiscountCheck($query: String!) {
+    automaticDiscountNodes(first: 25, query: $query) {
+      edges {
+        node {
+          id
+          discount {
+            ... on DiscountAutomaticApp {
+              title
+              status
+              appDiscountType {
+                functionId
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const CREATE_AUTO_DISCOUNT_MUTATION = `#graphql
+  mutation SmartBundleDiscountCreate($automaticAppDiscount: DiscountAutomaticAppInput!) {
+    discountAutomaticAppCreate(automaticAppDiscount: $automaticAppDiscount) {
+      userErrors {
+        field
+        message
+      }
+      automaticAppDiscount {
+        id
+        discountId
+        title
+        status
+      }
+    }
+  }
+`;
+
+function formatGraphQLErrors(errors = []) {
+  return errors
+    .map((error) => error?.message)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatUserErrors(userErrors = []) {
+  return userErrors
+    .map(({ field, message }) => {
+      const fieldPath = Array.isArray(field) ? field.join('.') : field;
+      return fieldPath ? `${fieldPath}: ${message}` : message;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function isWriteDiscountsError(message = '') {
+  const normalized = message.toLowerCase();
+  return normalized.includes('write_discounts') || normalized.includes('access denied');
+}
+
+async function ensureDiscountActive(admin) {
+  const functionId = getSmartBundleDiscountFunctionId() || FALLBACK_FUNCTION_ID_PLACEHOLDER;
+
+  if (!functionId || functionId === FALLBACK_FUNCTION_ID_PLACEHOLDER) {
+    return {
+      success: false,
+      duplicate: false,
+      error: MISSING_DISCOUNT_FUNCTION_ID_ERROR,
+      code: 'MISSING_DISCOUNT_FUNCTION_ID',
+    };
+  }
+
+  try {
+    const existingResponse = await admin.graphql(QUERY_EXISTING_AUTO_DISCOUNT, {
+      variables: {
+        query: `title:'${SMART_BUNDLE_AUTO_DISCOUNT_TITLE}'`,
+      },
+    });
+    const existingData = await existingResponse.json();
+
+    if (existingData.errors?.length) {
+      const queryError = formatGraphQLErrors(existingData.errors);
+      if (isWriteDiscountsError(queryError)) {
+        return {
+          success: false,
+          duplicate: false,
+          error: WRITE_DISCOUNTS_SCOPE_ERROR,
+          code: 'MISSING_WRITE_DISCOUNTS_SCOPE',
+        };
+      }
+
+      return {
+        success: false,
+        duplicate: false,
+        error: queryError,
+        code: 'DISCOUNT_CHECK_FAILED',
+      };
+    }
+
+    const existingActiveDiscount = (existingData?.data?.automaticDiscountNodes?.edges || [])
+      .map(({ node }) => ({
+        id: node?.id,
+        ...(node?.discount || {}),
+      }))
+      .find((discount) => (
+        discount?.title === SMART_BUNDLE_AUTO_DISCOUNT_TITLE &&
+        discount?.status === 'ACTIVE' &&
+        discount?.appDiscountType?.functionId === functionId
+      ));
+
+    if (existingActiveDiscount) {
+      return {
+        success: true,
+        duplicate: true,
+        discountId: existingActiveDiscount.id,
+      };
+    }
+
+    const createResponse = await admin.graphql(CREATE_AUTO_DISCOUNT_MUTATION, {
+      variables: {
+        automaticAppDiscount: {
+          title: SMART_BUNDLE_AUTO_DISCOUNT_TITLE,
+          functionId,
+          startsAt: new Date().toISOString(),
+        },
+      },
+    });
+    const createData = await createResponse.json();
+
+    if (createData.errors?.length) {
+      const mutationError = formatGraphQLErrors(createData.errors);
+      if (isWriteDiscountsError(mutationError)) {
+        return {
+          success: false,
+          duplicate: false,
+          error: WRITE_DISCOUNTS_SCOPE_ERROR,
+          code: 'MISSING_WRITE_DISCOUNTS_SCOPE',
+        };
+      }
+
+      return {
+        success: false,
+        duplicate: false,
+        error: mutationError,
+        code: 'DISCOUNT_CREATE_FAILED',
+      };
+    }
+
+    const { userErrors = [], automaticAppDiscount } =
+      createData?.data?.discountAutomaticAppCreate || {};
+
+    if (userErrors.length > 0) {
+      console.error('discountAutomaticAppCreate userErrors:', userErrors);
+      const detailedUserErrors = formatUserErrors(userErrors);
+
+      if (isWriteDiscountsError(detailedUserErrors)) {
+        return {
+          success: false,
+          duplicate: false,
+          error: WRITE_DISCOUNTS_SCOPE_ERROR,
+          code: 'MISSING_WRITE_DISCOUNTS_SCOPE',
+          userErrors,
+        };
+      }
+
+      return {
+        success: false,
+        duplicate: false,
+        error: detailedUserErrors,
+        code: 'DISCOUNT_CREATE_USER_ERRORS',
+        userErrors,
+      };
+    }
+
+    if (!automaticAppDiscount?.id) {
+      return {
+        success: false,
+        duplicate: false,
+        error: 'Discount was created but no discount ID was returned.',
+        code: 'DISCOUNT_ID_MISSING',
+      };
+    }
+
+    return {
+      success: true,
+      duplicate: false,
+      discountId: automaticAppDiscount.discountId || automaticAppDiscount.id,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      duplicate: false,
+      error: `Failed to ensure discount activation: ${error.message}`,
+      code: 'DISCOUNT_ACTIVATION_EXCEPTION',
+    };
+  }
 }
 
 /**
@@ -63,38 +269,18 @@ export async function action({ request }) {
 
   try {
     const formData = await request.formData();
-    const bundleTitle = formData.get('bundleTitle');
-    const discountType = formData.get('discountType');
-    const discountValue = parseFloat(formData.get('discountValue'));
-    const productsJson = formData.get('selectedProducts');
+    const validation = validateBundleSubmission({
+      bundleTitle: formData.get('bundleTitle'),
+      discountType: formData.get('discountType'),
+      discountValueRaw: formData.get('discountValue'),
+      productsJson: formData.get('selectedProducts'),
+    });
 
-    // Validate inputs
-    if (!bundleTitle || bundleTitle.trim().length === 0) {
-      return { error: 'Bundle title is required' };
+    if (!validation.success) {
+      return { error: validation.error };
     }
 
-    if (!discountType || !['percentage', 'fixed_amount'].includes(discountType)) {
-      return { error: 'Invalid discount type' };
-    }
-
-    if (isNaN(discountValue) || discountValue < 0) {
-      return { error: 'Discount value must be a positive number' };
-    }
-
-    if (discountType === 'percentage' && discountValue > 100) {
-      return { error: 'Percentage discount cannot exceed 100' };
-    }
-
-    let selectedProducts = [];
-    try {
-      selectedProducts = JSON.parse(productsJson || '[]');
-    } catch {
-      return { error: 'Invalid product data' };
-    }
-
-    if (!Array.isArray(selectedProducts) || selectedProducts.length < 2) {
-      return { error: 'At least 2 products must be selected for a bundle' };
-    }
+    const { bundleTitle, discountType, discountValue, selectedProducts } = validation.data;
 
     // Check for product collisions with existing active bundles
     const collisionCheck = await checkProductCollisions(session.shop, selectedProducts);
@@ -136,27 +322,40 @@ export async function action({ request }) {
       };
     }
 
-    // Register SmartBundle AI discount function if not already registered
-    // Function ID must be obtained from shopify.app.toml
-    const functionId = process.env.SHOPIFY_DISCOUNT_FUNCTION_ID;
+    try {
+      const discountResult = await ensureDiscountActive(admin);
 
-    if (!functionId) {
-      console.warn('SHOPIFY_DISCOUNT_FUNCTION_ID not set. Discount function not registered.');
-    } else {
-      try {
-        const discountResult = await registerSmartBundleDiscount(admin, functionId);
+      if (!discountResult.success) {
+        console.error('Automatic discount activation failed:', {
+          code: discountResult.code,
+          error: discountResult.error,
+          userErrors: discountResult.userErrors || [],
+        });
 
-        if (!discountResult.success && !discountResult.duplicate) {
-          console.error('Discount registration failed:', discountResult.error);
-          // Don't fail the bundle creation, just log the discount error
-          console.warn('Bundle created successfully, but discount registration failed. Please register the discount manually from Shopify Admin.');
-        } else if (discountResult.success) {
-          console.log('SmartBundle AI discount registered:', discountResult.discountId);
-        }
-      } catch (discountError) {
-        console.error('Error registering discount:', discountError);
-        // Don't fail the bundle creation if discount registration has an unexpected error
+        return {
+          success: false,
+          error: discountResult.error,
+          code: discountResult.code || 'DISCOUNT_ACTIVATION_FAILED',
+          bundleSaved: true,
+          bundleId: bundle.id,
+          discountRegistrationFailed: true,
+          writeDiscountsScopeRequired: discountResult.code === 'MISSING_WRITE_DISCOUNTS_SCOPE',
+        };
       }
+
+      if (!discountResult.duplicate) {
+        console.log('SmartBundle auto-discount registered:', discountResult.discountId);
+      }
+    } catch (discountError) {
+      console.error('Automatic discount activation exception:', discountError);
+      return {
+        success: false,
+        error: `Bundle saved, but automatic discount activation failed: ${discountError.message}`,
+        code: 'DISCOUNT_ACTIVATION_EXCEPTION',
+        bundleSaved: true,
+        bundleId: bundle.id,
+        discountRegistrationFailed: true,
+      };
     }
 
     // Return success with redirect signal
@@ -204,6 +403,15 @@ export default function CreateBundle() {
           id: product.id,
           title: product.title,
           handle: product.handle,
+          variantId:
+            typeof product?.variants?.[0]?.id === 'string'
+              ? product.variants[0].id
+              : '',
+          price:
+            typeof product?.variants?.[0]?.price === 'string' ||
+            typeof product?.variants?.[0]?.price === 'number'
+              ? product.variants[0].price
+              : '',
           image: product.images && product.images[0] ? product.images[0].originalSrc : null,
         }));
         setSelectedProducts(productData);
@@ -234,6 +442,8 @@ export default function CreateBundle() {
 
     if (!discountValue || isNaN(parseFloat(discountValue)) || parseFloat(discountValue) < 0) {
       newErrors.discountValue = 'Discount value must be a positive number';
+    } else if (discountType === 'percentage' && (parseFloat(discountValue) < 1 || parseFloat(discountValue) > 99)) {
+      newErrors.discountValue = 'Discount percentage must be between 1 and 99';
     }
 
     setErrors(newErrors);
@@ -247,7 +457,7 @@ export default function CreateBundle() {
   }
 
   return (
-    <div className="SB_page">
+    <div className="SB_admin_container SB_page">
         {/* Page Header */}
         <div className="SB_header">
           <h1 className="SB_headerTitle">Create New Bundle</h1>
@@ -266,12 +476,12 @@ export default function CreateBundle() {
         <Form method="post">
           {/* Bundle Configuration Card */}
           <div className="SB_card">
-            <h2 className="SB_cardTitle">Bundle Details</h2>
+            <h2 className="SB_cardTitle Polaris-Text--headingLg">Bundle Details</h2>
 
             {/* Bundle Title */}
             <div className="SB_formGroup">
               <label htmlFor="bundleTitle" className="SB_label">
-                Bundle Title <span style={{ color: '#d72c0d' }}>*</span>
+                Bundle Title <span className="SB_requiredMark">*</span>
               </label>
               <input
                 id="bundleTitle"
@@ -293,7 +503,7 @@ export default function CreateBundle() {
             {/* Discount Configuration */}
             <div className="SB_formGroup">
               <label htmlFor="discountType" className="SB_label">
-                Discount Configuration <span style={{ color: '#d72c0d' }}>*</span>
+                Discount Configuration <span className="SB_requiredMark">*</span>
               </label>
               <div className="SB_discountRow">
                 <select
@@ -334,7 +544,7 @@ export default function CreateBundle() {
 
           {/* Product Selection Card */}
           <div className="SB_card">
-            <h2 className="SB_cardTitle">Product Selection</h2>
+            <h2 className="SB_cardTitle Polaris-Text--headingLg">Product Selection</h2>
 
             <div className="SB_productPicker">
               <button
@@ -346,7 +556,7 @@ export default function CreateBundle() {
               </button>
 
               {errors.selectedProducts && (
-                <div className="SB_banner error" style={{ marginTop: '12px' }}>
+                <div className="SB_banner error SB_bannerInline">
                   <p className="SB_bannerText">{errors.selectedProducts}</p>
                 </div>
               )}
@@ -355,12 +565,12 @@ export default function CreateBundle() {
             {/* Selected Products List */}
             {selectedProducts.length > 0 && (
               <div className="SB_productList">
-                <h3 style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--p-color-text)', margin: '0 0 12px 0' }}>
+                <h3 className="SB_productListTitle">
                   Selected Products ({selectedProducts.length})
                 </h3>
 
                 {selectedProducts.map((product) => (
-                  <div key={product.id} className="SB_productItem">
+                  <div key={product.id} className="SB_productItem SB_product_row">
                     {product.image && (
                       <img
                         src={product.image}
