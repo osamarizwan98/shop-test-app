@@ -4,15 +4,24 @@ query CartInput {
     lines {
       id
       quantity
+      cost {
+        subtotalAmount {
+          amount
+        }
+      }
       merchandise {
         __typename
         ... on ProductVariant {
+          id
           product {
             id
           }
         }
       }
     }
+  }
+  discount {
+    discountClasses
   }
   shop {
     metafield(namespace: "smart_bundle", key: "active_bundles") {

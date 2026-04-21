@@ -1,0 +1,14 @@
+<div class="SB_fbt_pricing_summary">
+  <div class="SB_fbt_pricing_row">
+    <span class="SB_fbt_pricing_label">Total price</span>
+    <span class="SB_fbt_pricing_value SB_fbt_pricing_value--compare">{{ total_price | money }}</span>
+  </div>
+  <div class="SB_fbt_pricing_row SB_fbt_pricing_row--highlight">
+    <span class="SB_fbt_pricing_label">Discounted price</span>
+    <span class="SB_fbt_pricing_value">{{ discounted_price | money }}</span>
+  </div>
+  <div class="SB_fbt_pricing_footer">
+    <span class="SB_fbt_savings_badge">Save {{ savings_amount | money }}</span>
+    <span class="SB_fbt_discount_label">{{ discount_label }}</span>
+  </div>
+</div>

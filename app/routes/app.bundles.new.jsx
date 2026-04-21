@@ -140,6 +140,11 @@ async function ensureDiscountActive(admin) {
         automaticAppDiscount: {
           title: SMART_BUNDLE_AUTO_DISCOUNT_TITLE,
           functionId,
+          combinesWith: {
+            orderDiscounts: false,
+            productDiscounts: false,
+            shippingDiscounts: false,
+          },
           startsAt: new Date().toISOString(),
         },
       },

@@ -1,0 +1,107 @@
+{% liquid
+  assign active_bundles = app.metafields.smart_bundle.active_bundles.value
+  assign initial_item_count = cart.item_count | default: 0
+  assign milestones_json = '['
+  assign milestone_count = 0
+
+  if active_bundles != blank
+    for bundle in active_bundles
+      assign bundle_size = bundle.products.size | default: 0
+      if bundle_size <= 0
+        continue
+      endif
+
+      assign bundle_tiers = bundle.SB_tiers | default: bundle.tiers
+
+      if bundle_tiers != blank
+        for tier in bundle_tiers
+          assign minimum_sets = tier.SB_minimumQuantity | default: tier.minimumQuantity | default: tier.minimum_quantity | plus: 0
+          assign discount_type = tier.SB_type | default: tier.type | default: 'percentage'
+          assign discount_value = tier.SB_value | default: tier.value | plus: 0
+          assign formatted_discount = discount_value | append: '%'
+
+          if discount_type == 'fixed' or discount_type == 'fixed_amount'
+            assign formatted_discount = discount_value | times: 100 | money
+          endif
+
+          if minimum_sets <= 0 or discount_value <= 0
+            continue
+          endif
+
+          assign threshold = minimum_sets | times: bundle_size
+
+          if milestone_count > 0
+            assign milestones_json = milestones_json | append: ','
+          endif
+
+          assign milestones_json = milestones_json
+            | append: '{"threshold":'
+            | append: threshold
+            | append: ',"label":"'
+            | append: threshold
+            | append: ' items","message":"Unlock '
+            | append: formatted_discount
+            | append: ' off","discountValue":'
+            | append: discount_value
+            | append: ',"discountType":"'
+            | append: discount_type
+            | append: '"}'
+
+          assign milestone_count = milestone_count | plus: 1
+        endfor
+      else
+        assign discount_type = bundle.discountType | default: bundle.type | default: 'percentage'
+        assign discount_value = bundle.discountValue | default: bundle.value | plus: 0
+        assign formatted_discount = discount_value | append: '%'
+
+        if discount_type == 'fixed' or discount_type == 'fixed_amount'
+          assign formatted_discount = discount_value | times: 100 | money
+        endif
+
+        if discount_value <= 0
+          continue
+        endif
+
+        if milestone_count > 0
+          assign milestones_json = milestones_json | append: ','
+        endif
+
+        assign milestones_json = milestones_json
+          | append: '{"threshold":'
+          | append: bundle_size
+          | append: ',"label":"'
+          | append: bundle_size
+          | append: ' items","message":"Unlock '
+          | append: formatted_discount
+          | append: ' off","discountValue":'
+          | append: discount_value
+          | append: ',"discountType":"'
+          | append: discount_type
+          | append: '"}'
+
+        assign milestone_count = milestone_count | plus: 1
+      endif
+    endfor
+  endif
+
+  assign milestones_json = milestones_json | append: ']'
+%}
+
+{% if milestone_count > 0 %}
+  <section {{ block.shopify_attributes }} class="SB_cart_progress_wrapper">
+    {% render 'sb-cart-progress',
+      milestones: milestones_json,
+      initial_item_count: initial_item_count
+    %}
+  </section>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Cart Progress Bar",
+  "target": "section",
+  "stylesheet": "sb-cart-progress.css",
+  "javascript": "sb-cart-progress.js",
+  "settings": []
+}
+{% endschema %}

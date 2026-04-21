@@ -1,0 +1,24 @@
+{% liquid
+  assign resolved_milestones = milestones
+  assign initial_item_count = initial_item_count | default: 0
+%}
+
+<div
+  class="SB_cart_progress"
+  data-sb-cart-progress
+  data-sb-cart-progress-milestones='{{ resolved_milestones | escape }}'
+  data-sb-cart-progress-initial-count="{{ initial_item_count }}"
+>
+  <div class="SB_cart_progress_header">
+    <p class="SB_cart_progress_eyebrow">SmartBundle AI</p>
+    <p class="SB_cart_progress_message" data-sb-progress-message>
+      Add items to unlock your next bundle discount.
+    </p>
+  </div>
+
+  <div class="SB_cart_progress_track" aria-hidden="true">
+    <div class="SB_cart_progress_fill" data-sb-progress-fill></div>
+  </div>
+
+  <div class="SB_cart_progress_milestones" data-sb-progress-milestones></div>
+</div>

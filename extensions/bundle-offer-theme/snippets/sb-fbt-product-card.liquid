@@ -1,0 +1,24 @@
+<article class="SB_fbt_product_card{% if is_current_product %} SB_fbt_product_card--current{% endif %}">
+  <div class="SB_fbt_product_media">
+    {% if image != blank %}
+      {{ image | image_url: width: 220 | image_tag: class: 'SB_fbt_product_image', loading: 'lazy', widths: '120, 180, 220', alt: title }}
+    {% else %}
+      <div class="SB_fbt_product_image SB_fbt_product_image--placeholder" aria-hidden="true"></div>
+    {% endif %}
+  </div>
+  <div class="SB_fbt_product_copy">
+    <p class="SB_fbt_product_title">{{ title }}</p>
+    <p class="SB_fbt_product_meta">
+      {% if is_current_product %}
+        Included from this page
+      {% elsif variant_available %}
+        Add-on item
+      {% else %}
+        Out of stock
+      {% endif %}
+    </p>
+    {% if price_text != blank %}
+      <p class="SB_fbt_product_price">{{ price_text }}</p>
+    {% endif %}
+  </div>
+</article>
