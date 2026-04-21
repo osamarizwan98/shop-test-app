@@ -1,0 +1,2 @@
+ALTER TABLE "Bundle"
+ADD COLUMN "inventoryHidden" BOOLEAN NOT NULL DEFAULT false;

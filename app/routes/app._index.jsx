@@ -182,6 +182,7 @@ export async function action({ request }) {
         },
         data: {
           status: nextStatus,
+          inventoryHidden: false,
         },
       });
 

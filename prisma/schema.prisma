@@ -42,6 +42,7 @@ model Bundle {
   shop          String
   title         String
   status        BundleStatus @default(active)
+  inventoryHidden Boolean    @default(false)
   discountType  DiscountType
   discountValue Float
   productIds    Json
