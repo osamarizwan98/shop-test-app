@@ -1,0 +1,142 @@
+{% liquid
+  assign active_bundles = app.metafields.smart_bundle.active_bundles.value
+  assign bundle_count = 0
+  assign bundles_json = '['
+%}
+
+{% if active_bundles != blank %}
+  {% for bundle in active_bundles %}
+    {% liquid
+      assign bundle_items = bundle.products
+      assign product_count = 0
+      assign products_json = '['
+      assign bundle_total_cents = 0
+    %}
+
+    {% if bundle_items == blank %}
+      {% continue %}
+    {% endif %}
+
+    {% for bundle_item in bundle_items %}
+      {% liquid
+        assign handle = bundle_item.handle | default: '' | strip
+        assign title = bundle_item.title | default: handle | default: bundle_item.id | default: 'Bundle item'
+        assign resolved_variant_id = bundle_item.variantId | default: bundle_item.variant_id | default: ''
+        assign image_url = ''
+        assign available = true
+        assign price_cents = 0
+
+        if handle != blank
+          assign bundle_product = all_products[handle]
+          if bundle_product != blank
+            assign variant = bundle_product.selected_or_first_available_variant
+            if resolved_variant_id == blank
+              assign resolved_variant_id = variant.id
+            endif
+            assign image_url = bundle_product.featured_image | image_url: width: 180
+            assign available = variant.available
+            assign price_cents = variant.price | default: 0
+          endif
+        endif
+
+        assign resolved_variant_id = resolved_variant_id | append: '' | strip
+        if resolved_variant_id contains 'gid://shopify/ProductVariant/'
+          assign resolved_variant_id = resolved_variant_id | split: '/' | last
+        endif
+
+        if resolved_variant_id == blank
+          continue
+        endif
+
+        if product_count > 0
+          assign products_json = products_json | append: ','
+        endif
+
+        assign products_json = products_json
+          | append: '{"variantId":'
+          | append: resolved_variant_id | json
+          | append: ',"title":'
+          | append: title | json
+          | append: ',"handle":'
+          | append: handle | json
+          | append: ',"image":'
+          | append: image_url | json
+          | append: ',"available":'
+          | append: available
+          | append: ',"priceCents":'
+          | append: price_cents
+          | append: '}'
+
+        assign product_count = product_count | plus: 1
+        assign bundle_total_cents = bundle_total_cents | plus: price_cents
+      %}
+    {% endfor %}
+
+    {% liquid
+      assign products_json = products_json | append: ']'
+    %}
+
+    {% if product_count < 2 %}
+      {% continue %}
+    {% endif %}
+
+    {% liquid
+      assign discount_type = bundle.type | default: bundle.discountType | default: 'percentage'
+      assign discount_value = bundle.value | default: bundle.discountValue | default: 0 | plus: 0
+      assign savings_cents = 0
+
+      if discount_value > 0
+        if discount_type == 'fixed' or discount_type == 'fixed_amount'
+          assign savings_cents = discount_value | times: 100
+        else
+          assign savings_cents = bundle_total_cents | times: discount_value | divided_by: 100
+        endif
+      endif
+
+      assign savings_money = savings_cents | money
+    %}
+
+    {% liquid
+      if bundle_count > 0
+        assign bundles_json = bundles_json | append: ','
+      endif
+
+      assign bundles_json = bundles_json
+        | append: '{"id":'
+        | append: bundle.id | json
+        | append: ',"title":'
+        | append: bundle.title | default: 'Bundle' | json
+        | append: ',"type":'
+        | append: discount_type | json
+        | append: ',"value":'
+        | append: discount_value
+        | append: ',"savingsMoney":'
+        | append: savings_money | json
+        | append: ',"products":'
+        | append: products_json
+        | append: '}'
+
+      assign bundle_count = bundle_count | plus: 1
+    %}
+  {% endfor %}
+{% endif %}
+
+{% liquid
+  assign bundles_json = bundles_json | append: ']'
+%}
+
+{% if bundle_count > 0 %}
+  <section {{ block.shopify_attributes }} class="SB_cart_bundle_reminder_wrapper">
+    {% render 'sb-cart-bundle-reminder', bundles_json: bundles_json %}
+  </section>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Cart Bundle Reminder",
+  "target": "section",
+  "stylesheet": "sb-cart-bundle-reminder.css",
+  "javascript": "sb-cart-bundle-reminder.js",
+  "settings": []
+}
+{% endschema %}

@@ -142,6 +142,8 @@
         style="background: {{ block.settings.accent_color | default: '#2f80ed' }};"
         data-sb-variants="{{ variant_ids_string | strip_newlines | strip | escape }}"
         data-sb-variant-names="{{ variant_titles_string | strip_newlines | strip | escape }}"
+        data-sb-bundle-id="{{ matched_bundle.id | escape }}"
+        data-sb-bundle-title="{{ matched_bundle.title | default: offer_label | escape }}"
         data-default-text="{{ button_label | escape }}"
         onclick="SB_addBundleToCartFromButton(this)"
       >

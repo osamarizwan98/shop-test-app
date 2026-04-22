@@ -80,7 +80,7 @@ export async function loader({ request }) {
           createdAt: 'desc',
         },
       }),
-      AnalyticsService.getAnalytics(session.shop),
+      AnalyticsService.getDashboardAnalytics(session.shop),
     ]);
 
     const plainBundles = bundles.map((bundle) => ({
@@ -97,9 +97,12 @@ export async function loader({ request }) {
     const activeBundles = plainBundles.filter((bundle) => bundle.status === 'active').length;
     const inactiveBundles = plainBundles.filter((bundle) => bundle.status === 'inactive').length;
 
-    const safeRevenue = Number(toSafeNumber(analyticsRaw?.totalRevenue).toFixed(2));
-    const safeSavings = Number(toSafeNumber(analyticsRaw?.totalSavings).toFixed(2));
-    const safeBundleSales = toSafeCount(analyticsRaw?.totalBundleSales);
+    const safeRevenue = Number(toSafeNumber(analyticsRaw?.bundleRevenue).toFixed(2));
+    const safeNonBundleRevenue = Number(toSafeNumber(analyticsRaw?.nonBundleRevenue).toFixed(2));
+    const safeBundleSales = toSafeCount(analyticsRaw?.bundleOrders);
+    const safeTotalOrders = toSafeCount(analyticsRaw?.totalOrders);
+    const safeConversionRate = Number(toSafeNumber(analyticsRaw?.bundleConversionRate) * 100);
+    const safeUplift = Number(toSafeNumber(analyticsRaw?.revenueUplift) * 100);
 
     const payload = {
       bundles: plainBundles,
@@ -109,9 +112,14 @@ export async function loader({ request }) {
         inactiveBundles,
       },
       analytics: {
+        totalOrders: safeTotalOrders,
         totalBundleSales: safeBundleSales,
         totalRevenue: safeRevenue,
-        totalSavings: safeSavings,
+        totalNonBundleRevenue: safeNonBundleRevenue,
+        bundleConversionRate: safeConversionRate,
+        revenueUplift: safeUplift,
+        topBundles: Array.isArray(analyticsRaw?.topBundles) ? analyticsRaw.topBundles : [],
+        trend: Array.isArray(analyticsRaw?.trend) ? analyticsRaw.trend : [],
         lastUpdatedAt: new Date().toISOString(),
       },
     };
@@ -286,6 +294,66 @@ function renderSBStatCard({ key, label, value, icon, emphasizeValue = false }) {
   );
 }
 
+function renderTrendChart(series = []) {
+  const normalized = Array.isArray(series) ? series : [];
+  if (normalized.length === 0) {
+    return (
+      <div className="SB_chartEmpty">
+        <p className="SB_section-note">No trend data yet. New orders will appear here automatically.</p>
+      </div>
+    );
+  }
+
+  const points = normalized.map((entry) => {
+    const bundleRevenue = toSafeNumber(entry?.bundleRevenue);
+    const nonBundleRevenue = toSafeNumber(entry?.nonBundleRevenue);
+    return {
+      day: String(entry?.day || ''),
+      total: bundleRevenue + nonBundleRevenue,
+      bundleRevenue,
+    };
+  });
+
+  const maxValue = Math.max(...points.map((p) => p.total), 1);
+  const width = 680;
+  const height = 160;
+  const padding = 18;
+
+  const toX = (index) => {
+    if (points.length === 1) {
+      return padding;
+    }
+    const usable = width - padding * 2;
+    return padding + (usable * index) / (points.length - 1);
+  };
+
+  const toY = (value) => {
+    const usable = height - padding * 2;
+    return height - padding - (usable * value) / maxValue;
+  };
+
+  const totalPath = points
+    .map((p, index) => `${index === 0 ? 'M' : 'L'} ${toX(index)} ${toY(p.total)}`)
+    .join(' ');
+  const bundlePath = points
+    .map((p, index) => `${index === 0 ? 'M' : 'L'} ${toX(index)} ${toY(p.bundleRevenue)}`)
+    .join(' ');
+
+  return (
+    <div className="SB_trendChart" role="img" aria-label="Revenue trend chart">
+      <svg viewBox={`0 0 ${width} ${height}`} className="SB_trendChartSvg" aria-hidden="true">
+        <path className="SB_trendChartGrid" d={`M ${padding} ${height - padding} H ${width - padding}`} />
+        <path className="SB_trendChartLine SB_trendChartLine--total" d={totalPath} />
+        <path className="SB_trendChartLine SB_trendChartLine--bundle" d={bundlePath} />
+      </svg>
+      <div className="SB_trendChartLegend">
+        <span className="SB_legendItem"><span className="SB_legendSwatch total" aria-hidden="true"></span>Total</span>
+        <span className="SB_legendItem"><span className="SB_legendSwatch bundle" aria-hidden="true"></span>Bundle</span>
+      </div>
+    </div>
+  );
+}
+
 export default function AppIndex() {
   const { bundles, stats, analytics } = useLoaderData();
   const fetcher = useFetcher();
@@ -300,6 +368,13 @@ export default function AppIndex() {
       emphasizeValue: true,
     },
     {
+      key: 'uplift',
+      label: 'Revenue Uplift',
+      value: `${toSafeNumber(analytics?.revenueUplift).toFixed(1)}%`,
+      icon: '↑',
+      emphasizeValue: false,
+    },
+    {
       key: 'sales',
       label: 'Bundle Sales',
       value: `${toSafeCount(analytics?.totalBundleSales)}`,
@@ -307,13 +382,13 @@ export default function AppIndex() {
       emphasizeValue: false,
     },
     {
-      key: 'savings',
-      label: 'Customer Savings',
-      value: formatCurrency(analytics?.totalSavings),
-      icon: '%',
+      key: 'conversion',
+      label: 'Bundle Conversion',
+      value: `${toSafeNumber(analytics?.bundleConversionRate).toFixed(1)}%`,
+      icon: '◎',
       emphasizeValue: false,
     },
-  ]), [analytics?.totalBundleSales, analytics?.totalRevenue, analytics?.totalSavings]);
+  ]), [analytics?.bundleConversionRate, analytics?.revenueUplift, analytics?.totalBundleSales, analytics?.totalRevenue]);
 
   useEffect(() => {
     if (!fetcher.data) {
@@ -381,6 +456,56 @@ export default function AppIndex() {
         </div>
       </section>
 
+      <section className="SB_section">
+        <div className="SB_section-header">
+          <div>
+            <h2 className="SB_section-title Polaris-Text--headingLg">Revenue Trend</h2>
+            <p className="SB_section-note">Daily subtotal revenue for the last 14 days.</p>
+          </div>
+        </div>
+        {renderTrendChart(analytics?.trend)}
+      </section>
+
+      <section className="SB_section">
+        <div className="SB_section-header">
+          <div>
+            <h2 className="SB_section-title Polaris-Text--headingLg">Top Performing Bundles</h2>
+            <p className="SB_section-note">Ranked by attributed revenue.</p>
+          </div>
+        </div>
+
+        {Array.isArray(analytics?.topBundles) && analytics.topBundles.length > 0 ? (
+          <div>
+            <table className="SB_table">
+              <thead>
+                <tr>
+                  <th>Bundle</th>
+                  <th>Conversions</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.topBundles.map((entry) => (
+                  <tr key={entry.bundleId}>
+                    <td>
+                      <strong className="SB_bundleTitle">{entry.bundleTitle || entry.bundleId}</strong>
+                    </td>
+                    <td>{toSafeCount(entry.conversions)}</td>
+                    <td>{formatCurrency(entry.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="SB_empty_state_wrapper">
+            <div className="SB_banner SB_bannerInline">
+              <p className="SB_bannerText">No bundle conversions yet. Once orders come in, leaderboard data will appear here.</p>
+            </div>
+          </div>
+        )}
+      </section>
+
       <div className="SB_stats-grid">
         <article className="SB_stat-card">
           <span className="SB_stat-label">Total bundles</span>
@@ -393,6 +518,10 @@ export default function AppIndex() {
         <article className="SB_stat-card">
           <span className="SB_stat-label">Inactive bundles</span>
           <strong className="SB_stat-value">{stats.inactiveBundles}</strong>
+        </article>
+        <article className="SB_stat-card">
+          <span className="SB_stat-label">Total orders tracked</span>
+          <strong className="SB_stat-value">{toSafeCount(analytics?.totalOrders)}</strong>
         </article>
       </div>
 

@@ -1,6 +1,7 @@
 const PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST = "FIRST";
 const PRODUCT_DISCOUNT_CLASS = "PRODUCT";
-const MAX_PERCENTAGE_DISCOUNT = 90;
+const DEFAULT_MAX_DISCOUNT_CAP_PERCENT = 80;
+const MAX_ALLOWED_CAP_PERCENT = 100;
 const EMPTY_RESULT = {
   operations: [],
 };
@@ -15,13 +16,17 @@ function toPositiveNumber(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function toNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function normalizeDiscountType(value) {
   if (typeof value !== "string") {
     return null;
   }
 
   const normalized = value.trim().toLowerCase();
-
   if (normalized === "percentage") {
     return "percentage";
   }
@@ -58,12 +63,17 @@ function normalizeGid(value, expectedType) {
   return null;
 }
 
+function normalizeCode(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 function normalizeMerchandiseReference(rawItem) {
   if (typeof rawItem === "string") {
     return {
       productId: normalizeGid(rawItem, "Product"),
       variantId: null,
       quantity: 1,
+      noStackingWithManualCode: false,
     };
   }
 
@@ -88,6 +98,7 @@ function normalizeMerchandiseReference(rawItem) {
     variantId,
     productId,
     quantity,
+    noStackingWithManualCode: false,
   };
 }
 
@@ -120,10 +131,7 @@ function extractBundleItems(bundle) {
     return [];
   }
 
-  const items = rawItems
-    .map(normalizeMerchandiseReference)
-    .filter(Boolean);
-
+  const items = rawItems.map(normalizeMerchandiseReference).filter(Boolean);
   return mergeBundleItems(items);
 }
 
@@ -145,7 +153,7 @@ function normalizeTier(rawTier) {
     return null;
   }
 
-  if (discountType === "percentage" && discountValue > MAX_PERCENTAGE_DISCOUNT) {
+  if (discountType === "percentage" && discountValue > MAX_ALLOWED_CAP_PERCENT) {
     return null;
   }
 
@@ -164,7 +172,7 @@ function buildLegacyTier(bundle) {
     return null;
   }
 
-  if (discountType === "percentage" && discountValue > MAX_PERCENTAGE_DISCOUNT) {
+  if (discountType === "percentage" && discountValue > MAX_ALLOWED_CAP_PERCENT) {
     return null;
   }
 
@@ -177,9 +185,28 @@ function buildLegacyTier(bundle) {
 
 function extractTiers(bundle) {
   const rawTiers = bundle?.SB_tiers ?? bundle?.tiers;
-  const normalizedTiers = Array.isArray(rawTiers)
-    ? rawTiers.map(normalizeTier).filter(Boolean)
-    : [];
+  let normalizedTiers = [];
+
+  if (Array.isArray(rawTiers)) {
+    normalizedTiers = rawTiers.map(normalizeTier).filter(Boolean);
+  } else if (rawTiers && typeof rawTiers === "object") {
+    normalizedTiers = Object.entries(rawTiers)
+      .map(([minimumQuantity, discountValue]) => {
+        const minQty = toPositiveInteger(minimumQuantity, 0);
+        const value = toPositiveNumber(discountValue);
+
+        if (!minQty || !value || value > MAX_ALLOWED_CAP_PERCENT) {
+          return null;
+        }
+
+        return {
+          minimumQuantity: minQty,
+          discountType: "percentage",
+          discountValue: value,
+        };
+      })
+      .filter(Boolean);
+  }
 
   if (normalizedTiers.length > 0) {
     return normalizedTiers.sort(
@@ -191,7 +218,34 @@ function extractTiers(bundle) {
   return legacyTier ? [legacyTier] : [];
 }
 
-function normalizeBundle(bundle) {
+function parseStackingPolicy(bundle, globalConfig) {
+  const localNoStacking = Boolean(
+    bundle?.SB_noStackingWithManualCode ??
+      bundle?.noStackingWithManualCode ??
+      bundle?.noStacking,
+  );
+
+  if (localNoStacking) {
+    return "no_manual_codes";
+  }
+
+  if (globalConfig?.allowManualCodeStacking === true) {
+    return "allow_all";
+  }
+
+  if (globalConfig?.allowManualCodeStacking === false) {
+    return "no_manual_codes";
+  }
+
+  const configuredPolicy = String(globalConfig?.stackingPolicy || "").trim().toLowerCase();
+  if (configuredPolicy === "allow_all" || configuredPolicy === "no_manual_codes") {
+    return configuredPolicy;
+  }
+
+  return "allow_all";
+}
+
+function normalizeBundle(bundle, globalConfig) {
   if (!bundle || typeof bundle !== "object") {
     return null;
   }
@@ -211,6 +265,7 @@ function normalizeBundle(bundle) {
         : "SB_Bundle discount",
     items,
     tiers,
+    stackingPolicy: parseStackingPolicy(bundle, globalConfig),
   };
 }
 
@@ -226,12 +281,12 @@ function buildCartIndexes(lines) {
 
     const variantId = normalizeGid(line?.merchandise?.id, "ProductVariant");
     const productId = normalizeGid(line?.merchandise?.product?.id, "Product");
-    const subtotalAmount = Number(line?.cost?.subtotalAmount?.amount ?? 0);
+    const subtotalAmount = toNumber(line?.cost?.subtotalAmount?.amount, 0);
 
     const indexedLine = {
       id: line.id,
       quantity,
-      subtotalAmount: Number.isFinite(subtotalAmount) ? subtotalAmount : 0,
+      subtotalAmount,
     };
 
     if (variantId) {
@@ -266,31 +321,54 @@ function getAvailableQuantity(lines) {
   return lines.reduce((total, line) => total + line.quantity, 0);
 }
 
-function calculateBundleSets(bundle, indexes) {
-  let maxSets = Number.POSITIVE_INFINITY;
+function buildBundleEligibleLineQuantities(bundle, indexes) {
+  const lineQuantityById = new Map();
 
   for (const item of bundle.items) {
     const lines = getAvailableLines(item, indexes);
     if (lines.length === 0) {
-      return 0;
+      continue;
     }
 
-    const setsForItem = Math.floor(getAvailableQuantity(lines) / item.quantity);
-    if (setsForItem <= 0) {
-      return 0;
+    for (const line of lines) {
+      const existing = lineQuantityById.get(line.id);
+      if (existing) {
+        existing.quantity = Math.max(existing.quantity, line.quantity);
+        existing.subtotalAmount = Math.max(existing.subtotalAmount, line.subtotalAmount);
+      } else {
+        lineQuantityById.set(line.id, {
+          id: line.id,
+          quantity: line.quantity,
+          subtotalAmount: line.subtotalAmount,
+        });
+      }
     }
-
-    maxSets = Math.min(maxSets, setsForItem);
   }
 
-  return Number.isFinite(maxSets) ? maxSets : 0;
+  return Array.from(lineQuantityById.values());
 }
 
-function resolveTier(bundleSets, tiers) {
+function getDiscountPercentage(quantity, tiers) {
+  let highestPercentage = 0;
+
+  for (const tier of tiers) {
+    if (tier.discountType !== "percentage") {
+      continue;
+    }
+
+    if (quantity >= tier.minimumQuantity && tier.discountValue > highestPercentage) {
+      highestPercentage = tier.discountValue;
+    }
+  }
+
+  return highestPercentage;
+}
+
+function resolveTier(quantity, tiers) {
   let matchedTier = null;
 
   for (const tier of tiers) {
-    if (bundleSets >= tier.minimumQuantity) {
+    if (quantity >= tier.minimumQuantity) {
       matchedTier = tier;
     }
   }
@@ -298,44 +376,28 @@ function resolveTier(bundleSets, tiers) {
   return matchedTier;
 }
 
-function buildTargets(bundle, appliedSets, indexes) {
+function buildTargets(eligibleLines) {
   const targets = [];
   let targetedSubtotal = 0;
 
-  for (const item of bundle.items) {
-    const lines = getAvailableLines(item, indexes);
-    let remainingQuantity = appliedSets * item.quantity;
-
-    for (const line of lines) {
-      if (remainingQuantity <= 0) {
-        break;
-      }
-
-      const discountedQuantity = Math.min(line.quantity, remainingQuantity);
-      if (discountedQuantity <= 0) {
-        continue;
-      }
-
-      const unitSubtotal = line.quantity > 0 ? line.subtotalAmount / line.quantity : 0;
-      targetedSubtotal += unitSubtotal * discountedQuantity;
-      targets.push({
-        cartLine: {
-          id: line.id,
-          quantity: discountedQuantity,
-        },
-      });
-      remainingQuantity -= discountedQuantity;
+  for (const line of eligibleLines) {
+    if (line.quantity <= 0) {
+      continue;
     }
 
-    if (remainingQuantity > 0) {
-      return { targets: [], targetedSubtotal: 0 };
-    }
+    targets.push({
+      cartLine: {
+        id: line.id,
+        quantity: line.quantity,
+      },
+    });
+    targetedSubtotal += line.subtotalAmount;
   }
 
   return { targets, targetedSubtotal };
 }
 
-function buildDiscountValue(tier, appliedSets) {
+function buildDiscountValue(tier, quantity) {
   if (tier.discountType === "percentage") {
     return {
       percentage: {
@@ -346,77 +408,187 @@ function buildDiscountValue(tier, appliedSets) {
 
   return {
     fixedAmount: {
-      amount: tier.discountValue * appliedSets,
+      amount: tier.discountValue * quantity,
     },
   };
 }
 
-function exceedsSafetyGuard(tier, appliedSets, targetedSubtotal) {
-  if (tier.discountType === "percentage") {
-    return tier.discountValue > MAX_PERCENTAGE_DISCOUNT;
-  }
-
+function estimateDiscountAmount(tier, quantity, targetedSubtotal) {
   if (!(targetedSubtotal > 0)) {
-    return true;
+    return 0;
   }
 
-  const totalDiscountAmount = tier.discountValue * appliedSets;
-  return totalDiscountAmount > targetedSubtotal * 0.9;
+  if (tier.discountType === "percentage") {
+    return targetedSubtotal * (tier.discountValue / 100);
+  }
+
+  return tier.discountValue * quantity;
 }
 
-function buildCandidate(bundle, indexes) {
-  const bundleSets = calculateBundleSets(bundle, indexes);
-  if (bundleSets <= 0) {
-    return null;
+function buildTierMessage(bundleTitle, tier, quantity, tiers) {
+  if (tier.discountType === "percentage") {
+    const percentage = getDiscountPercentage(quantity, tiers);
+    return `${bundleTitle} - ${percentage}% Off Applied`;
   }
 
-  const tier = resolveTier(bundleSets, bundle.tiers);
-  if (!tier) {
-    return null;
+  return `${bundleTitle} - Bundle Savings Applied`;
+}
+
+function parseFunctionConfig(discountMetafield) {
+  const raw = discountMetafield?.jsonValue;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      stackingPolicy: "allow_all",
+      allowManualCodeStacking: true,
+      maxDiscountCapPercent: DEFAULT_MAX_DISCOUNT_CAP_PERCENT,
+    };
   }
 
-  const { targets, targetedSubtotal } = buildTargets(bundle, bundleSets, indexes);
-  if (targets.length === 0) {
-    return null;
-  }
+  const configuredCap = toNumber(raw.maxDiscountCapPercent, DEFAULT_MAX_DISCOUNT_CAP_PERCENT);
+  const maxDiscountCapPercent = Math.min(
+    MAX_ALLOWED_CAP_PERCENT,
+    Math.max(1, configuredCap),
+  );
 
-  if (exceedsSafetyGuard(tier, bundleSets, targetedSubtotal)) {
-    return null;
-  }
+  const stackingPolicy = String(raw.stackingPolicy || "").trim().toLowerCase();
+  const allowManualCodeStacking =
+    typeof raw.allowManualCodeStacking === "boolean"
+      ? raw.allowManualCodeStacking
+      : stackingPolicy === "no_manual_codes"
+        ? false
+        : true;
 
   return {
-    message: bundle.title,
-    targets,
-    value: buildDiscountValue(tier, bundleSets),
+    stackingPolicy:
+      stackingPolicy === "no_manual_codes" ? "no_manual_codes" : "allow_all",
+    allowManualCodeStacking,
+    maxDiscountCapPercent,
   };
+}
+
+class Validator {
+  constructor(input) {
+    this.input = input || {};
+    this.cartLines = this.input?.cart?.lines ?? [];
+    this.activeBundles = this.input?.shop?.metafield?.jsonValue;
+    this.discountClasses = this.input?.discount?.discountClasses ?? [];
+    this.enteredDiscountCodes = this.input?.enteredDiscountCodes ?? [];
+    this.triggeringDiscountCode = this.input?.triggeringDiscountCode ?? null;
+    this.orderSubtotal = toNumber(this.input?.cart?.cost?.subtotalAmount?.amount, 0);
+    this.config = parseFunctionConfig(this.input?.discount?.metafield);
+    this.indexes = buildCartIndexes(this.cartLines);
+  }
+
+  isProductDiscountSupported() {
+    return this.discountClasses.includes(PRODUCT_DISCOUNT_CLASS);
+  }
+
+  hasEligibleInput() {
+    return (
+      this.cartLines.length > 0 &&
+      Array.isArray(this.activeBundles) &&
+      this.activeBundles.length > 0 &&
+      this.isProductDiscountSupported()
+    );
+  }
+
+  hasExternalManualDiscountCode() {
+    const triggerCode = normalizeCode(this.triggeringDiscountCode);
+
+    return this.enteredDiscountCodes.some((entry) => {
+      const code = normalizeCode(entry?.code);
+      if (!code) {
+        return false;
+      }
+
+      if (!triggerCode) {
+        return true;
+      }
+
+      return code !== triggerCode;
+    });
+  }
+
+  isStackingBlocked(bundle) {
+    if (bundle.stackingPolicy !== "no_manual_codes") {
+      return false;
+    }
+
+    return this.hasExternalManualDiscountCode();
+  }
+
+  getOrderDiscountCapAmount() {
+    return this.orderSubtotal * (this.config.maxDiscountCapPercent / 100);
+  }
+
+  buildCandidate(bundle) {
+    if (this.isStackingBlocked(bundle)) {
+      return null;
+    }
+
+    const eligibleLines = buildBundleEligibleLineQuantities(bundle, this.indexes);
+    if (eligibleLines.length === 0) {
+      return null;
+    }
+
+    const totalBundleQuantity = getAvailableQuantity(eligibleLines);
+    if (totalBundleQuantity <= 0) {
+      return null;
+    }
+
+    const tier = resolveTier(totalBundleQuantity, bundle.tiers);
+    if (!tier) {
+      return null;
+    }
+
+    const { targets, targetedSubtotal } = buildTargets(eligibleLines);
+    if (targets.length === 0 || !(targetedSubtotal > 0)) {
+      return null;
+    }
+
+    const estimatedDiscountAmount = estimateDiscountAmount(
+      tier,
+      totalBundleQuantity,
+      targetedSubtotal,
+    );
+    const discountCapAmount = this.getOrderDiscountCapAmount();
+
+    if (estimatedDiscountAmount <= 0 || estimatedDiscountAmount > discountCapAmount) {
+      return null;
+    }
+
+    return {
+      message: buildTierMessage(bundle.title, tier, totalBundleQuantity, bundle.tiers),
+      targets,
+      value: buildDiscountValue(tier, totalBundleQuantity),
+    };
+  }
+
+  buildCandidates() {
+    if (
+      this.indexes.linesByVariantId.size === 0 &&
+      this.indexes.linesByProductId.size === 0
+    ) {
+      return [];
+    }
+
+    return this.activeBundles
+      .map((bundle) => normalizeBundle(bundle, this.config))
+      .filter(Boolean)
+      .map((bundle) => this.buildCandidate(bundle))
+      .filter(Boolean);
+  }
 }
 
 // [START discount-function.run.cart]
 export function cartLinesDiscountsGenerateRun(input) {
-  const cartLines = input?.cart?.lines ?? [];
-  const activeBundles = input?.shop?.metafield?.jsonValue;
-  const discountClasses = input?.discount?.discountClasses ?? [];
+  const validator = new Validator(input);
 
-  if (
-    cartLines.length === 0 ||
-    !Array.isArray(activeBundles) ||
-    activeBundles.length === 0 ||
-    !discountClasses.includes(PRODUCT_DISCOUNT_CLASS)
-  ) {
+  if (!validator.hasEligibleInput()) {
     return EMPTY_RESULT;
   }
 
-  const indexes = buildCartIndexes(cartLines);
-  if (indexes.linesByVariantId.size === 0 && indexes.linesByProductId.size === 0) {
-    return EMPTY_RESULT;
-  }
-
-  const candidates = activeBundles
-    .map(normalizeBundle)
-    .filter(Boolean)
-    .map((bundle) => buildCandidate(bundle, indexes))
-    .filter(Boolean);
-
+  const candidates = validator.buildCandidates();
   if (candidates.length === 0) {
     return EMPTY_RESULT;
   }

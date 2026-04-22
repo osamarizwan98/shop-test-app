@@ -41,6 +41,8 @@ export async function handleAppUninstalled(shop) {
   await prisma.$transaction([
     prisma.bundle.deleteMany({ where: { shop } }),
     prisma.analytics.deleteMany({ where: { shop } }),
+    prisma.bundleAnalytics.deleteMany({ where: { shop } }),
+    prisma.orderAttribution.deleteMany({ where: { shop } }),
     prisma.inventoryAnalysis.deleteMany({ where: { shop } }),
     prisma.session.deleteMany({ where: { shop } }),
   ]);

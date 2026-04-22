@@ -66,6 +66,45 @@ model Analytics {
   @@index([shop])
 }
 
+model BundleAnalytics {
+  id          String   @id @default(uuid())
+  shop        String
+  bundleId    String
+  bundleTitle String
+  views       Int      @default(0)
+  clicks      Int      @default(0)
+  conversions Int      @default(0)
+  revenue     Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shop, bundleId])
+  @@index([shop])
+  @@index([shop, revenue])
+}
+
+model OrderAttribution {
+  id               String   @id @default(uuid())
+  shop             String
+  orderId          String
+  orderName        String?
+  currency         String?
+  isBundleOrder    Boolean  @default(false)
+  attributedBundles Json
+  grossRevenue     Float    @default(0)
+  refundedAmount   Float    @default(0)
+  netRevenue       Float    @default(0)
+  bundleRevenue    Float    @default(0)
+  nonBundleRevenue Float    @default(0)
+  isCanceled       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([shop, orderId])
+  @@index([shop, createdAt])
+  @@index([shop, isBundleOrder])
+}
+
 model InventoryAnalysis {
   id           String   @id @default(uuid())
   shop         String

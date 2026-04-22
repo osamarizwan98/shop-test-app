@@ -1,0 +1,143 @@
+.SB_cart_bundle_reminder_wrapper {
+  margin: 1rem 0;
+}
+
+.SB_cart_bundle_reminder_card {
+  border: 1px solid rgba(24, 29, 39, 0.08);
+  border-radius: 18px;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 18px 42px rgba(24, 29, 39, 0.06);
+}
+
+.SB_cart_bundle_reminder_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.SB_cart_bundle_reminder_eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ae5d2d;
+}
+
+.SB_cart_bundle_reminder_dismiss {
+  border: 0;
+  background: transparent;
+  color: rgba(31, 41, 55, 0.7);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 10px;
+}
+
+.SB_cart_bundle_reminder_dismiss:hover {
+  background: rgba(174, 93, 45, 0.10);
+  color: rgba(31, 41, 55, 0.9);
+}
+
+.SB_cart_bundle_reminder_body {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.SB_cart_bundle_reminder_media {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(174, 93, 45, 0.08);
+  border: 1px solid rgba(174, 93, 45, 0.14);
+}
+
+.SB_cart_bundle_reminder_image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.SB_cart_bundle_reminder_content p {
+  margin: 0;
+}
+
+.SB_cart_bundle_reminder_title {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.SB_cart_bundle_reminder_message {
+  margin-top: 0.25rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: rgba(31, 41, 55, 0.92);
+}
+
+.SB_cart_bundle_reminder_savings {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: rgba(174, 93, 45, 0.95);
+  font-weight: 600;
+}
+
+.SB_cart_bundle_reminder_actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.SB_cart_bundle_reminder_button {
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(90deg, #ae5d2d, #f59e0b);
+  color: #fff;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.SB_cart_bundle_reminder_button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+.SB_cart_bundle_reminder_button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.2) opacity(0.75);
+}
+
+.SB_cart_bundle_reminder_error {
+  margin: 0;
+  min-height: 1.1rem;
+  font-size: 0.88rem;
+  color: #b42318;
+}
+
+@media screen and (min-width: 750px) {
+  .SB_cart_bundle_reminder_card {
+    padding: 1.15rem 1.2rem;
+  }
+
+  .SB_cart_bundle_reminder_body {
+    grid-template-columns: 72px 1fr;
+  }
+
+  .SB_cart_bundle_reminder_media {
+    width: 72px;
+    height: 72px;
+  }
+}
+

@@ -1,0 +1,43 @@
+{% liquid
+  assign resolved_bundles_json = bundles_json
+%}
+
+<div
+  class="SB_cart_bundle_reminder"
+  data-sb-cart-bundle-reminder
+  data-sb-cart-bundle-reminder-bundles='{{ resolved_bundles_json | escape }}'
+>
+  <aside class="SB_cart_bundle_reminder_card" data-sb-reminder-card hidden>
+    <div class="SB_cart_bundle_reminder_header">
+      <p class="SB_cart_bundle_reminder_eyebrow">SmartBundle AI</p>
+      <button
+        type="button"
+        class="SB_cart_bundle_reminder_dismiss"
+        data-sb-reminder-dismiss
+        aria-label="Dismiss bundle reminder"
+      >
+        &times;
+      </button>
+    </div>
+
+    <div class="SB_cart_bundle_reminder_body">
+      <div class="SB_cart_bundle_reminder_media" aria-hidden="true">
+        <img class="SB_cart_bundle_reminder_image" alt="" data-sb-reminder-image loading="lazy" />
+      </div>
+
+      <div class="SB_cart_bundle_reminder_content">
+        <p class="SB_cart_bundle_reminder_title" data-sb-reminder-title></p>
+        <p class="SB_cart_bundle_reminder_message" data-sb-reminder-message></p>
+        <p class="SB_cart_bundle_reminder_savings" data-sb-reminder-savings></p>
+      </div>
+    </div>
+
+    <div class="SB_cart_bundle_reminder_actions">
+      <button type="button" class="SB_cart_bundle_reminder_button" data-sb-reminder-button>
+        Complete bundle
+      </button>
+      <p class="SB_cart_bundle_reminder_error" data-sb-reminder-error role="alert" aria-live="assertive"></p>
+    </div>
+  </aside>
+</div>
+

@@ -5,15 +5,13 @@ export const action = async ({ request }) => {
   try {
     const { topic, shop, payload } = await authenticate.webhook(request);
 
-    if (topic !== "ORDERS_CREATE") {
-      return { error: "Invalid topic" };
+    if (topic !== "REFUNDS_CREATE") {
+      return new Response(null, { status: 200 });
     }
 
-    // Process analytics asynchronously to avoid blocking webhook response
-    // Use setTimeout instead of setImmediate for better compatibility
     setTimeout(() => {
-      AnalyticsService.processOrderCreated(shop, payload).catch((error) => {
-        console.error(`Failed analytics processing for ${shop}`, error);
+      AnalyticsService.processRefundCreated(shop, payload).catch((error) => {
+        console.error(`Failed refund attribution for ${shop}`, error);
       });
     }, 0);
 
@@ -23,3 +21,4 @@ export const action = async ({ request }) => {
     return new Response(null, { status: 200 });
   }
 };
+

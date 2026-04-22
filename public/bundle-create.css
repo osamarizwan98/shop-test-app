@@ -967,3 +967,76 @@ body {
     flex-direction: column;
   }
 }
+
+.SB_trendChart {
+  border: 0.0625rem solid var(--p-color-border-secondary, #e3e3e3);
+  border-radius: 0.75rem;
+  padding: var(--p-space-5, 1.25rem);
+  background: var(--p-color-bg-surface, #ffffff);
+}
+
+.SB_trendChartSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.SB_trendChartGrid {
+  fill: none;
+  stroke: rgba(24, 29, 39, 0.14);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.SB_trendChartLine {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.SB_trendChartLine--total {
+  stroke: rgba(31, 41, 55, 0.55);
+}
+
+.SB_trendChartLine--bundle {
+  stroke: #ae5d2d;
+}
+
+.SB_trendChartLegend {
+  display: flex;
+  gap: var(--p-space-4, 1rem);
+  margin-top: var(--p-space-4, 1rem);
+  flex-wrap: wrap;
+}
+
+.SB_legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--p-space-2, 0.5rem);
+  font-size: 0.85rem;
+  color: rgba(31, 41, 55, 0.85);
+  font-weight: 600;
+}
+
+.SB_legendSwatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.SB_legendSwatch.total {
+  background: rgba(31, 41, 55, 0.55);
+}
+
+.SB_legendSwatch.bundle {
+  background: #ae5d2d;
+}
+
+.SB_chartEmpty {
+  border: 0.0625rem dashed rgba(24, 29, 39, 0.18);
+  border-radius: 0.75rem;
+  padding: var(--p-space-5, 1.25rem);
+  background: var(--p-color-bg-surface-secondary, #f6f6f7);
+}

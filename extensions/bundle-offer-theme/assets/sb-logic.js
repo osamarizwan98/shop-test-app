@@ -124,6 +124,9 @@ window.SB_addBundleToCart = async function SB_addBundleToCart(variantIds, varian
     return;
   }
 
+  const bundleId = buttonElement?.getAttribute('data-sb-bundle-id') || '';
+  const bundleTitle = buttonElement?.getAttribute('data-sb-bundle-title') || '';
+
   const items = variantIds.map((variantId) => {
     const numericId = SB_extractNumericVariantId(variantId);
     const fullGid = SB_toFullGid(variantId);
@@ -133,6 +136,8 @@ window.SB_addBundleToCart = async function SB_addBundleToCart(variantIds, varian
       quantity: 1,
       properties: {
         SB_variant_gid: fullGid,
+        ...(bundleId ? { SB_bundle_id: bundleId } : {}),
+        ...(bundleTitle ? { SB_bundle_title: bundleTitle } : {}),
       },
     };
   });
