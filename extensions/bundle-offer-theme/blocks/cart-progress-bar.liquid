@@ -41,18 +41,7 @@
             assign milestones_json = milestones_json | append: ','
           endif
 
-          assign milestones_json = milestones_json
-            | append: '{"threshold":'
-            | append: threshold
-            | append: ',"label":"'
-            | append: threshold
-            | append: ' items","message":"Unlock '
-            | append: formatted_discount
-            | append: ' off","discountValue":'
-            | append: discount_value
-            | append: ',"discountType":"'
-            | append: discount_type
-            | append: '"}'
+          assign milestones_json = milestones_json | append: '{"threshold":' | append: threshold | append: ',"label":"' | append: threshold | append: ' items","message":"Unlock ' | append: formatted_discount | append: ' off","discountValue":' | append: discount_value | append: ',"discountType":"' | append: discount_type | append: '"}'
 
           assign milestone_count = milestone_count | plus: 1
         endfor
@@ -73,18 +62,7 @@
           assign milestones_json = milestones_json | append: ','
         endif
 
-        assign milestones_json = milestones_json
-          | append: '{"threshold":'
-          | append: bundle_size
-          | append: ',"label":"'
-          | append: bundle_size
-          | append: ' items","message":"Unlock '
-          | append: formatted_discount
-          | append: ' off","discountValue":'
-          | append: discount_value
-          | append: ',"discountType":"'
-          | append: discount_type
-          | append: '"}'
+        assign milestones_json = milestones_json | append: '{"threshold":' | append: bundle_size | append: ',"label":"' | append: bundle_size | append: ' items","message":"Unlock ' | append: formatted_discount | append: ' off","discountValue":' | append: discount_value | append: ',"discountType":"' | append: discount_type | append: '"}'
 
         assign milestone_count = milestone_count | plus: 1
       endif

@@ -12,7 +12,7 @@ query CartInput {
       attribute(key: "_sb_bundle_id") {
         value
       }
-      attributes {
+      attribute {
         key
         value
       }
