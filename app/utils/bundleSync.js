@@ -1,4 +1,5 @@
 import prisma from '../db.server.js';
+import { getDefaultBundleStyleConfig, sanitizeBundleStyleConfig } from './styleConfig.server.js';
 
 /**
  * Utility functions for bundle synchronization and validation
@@ -184,6 +185,60 @@ export async function syncBundlesToShopify(admin, shop, retryCount = 0) {
     console.error('Bundle sync failed:', error);
     throw error;
   }
+}
+
+export async function syncBundleStyleConfigToShopify(admin, shop) {
+  const styleRecord = await prisma.bundleStyleSettings.findUnique({
+    where: { shop },
+    select: { config: true },
+  });
+
+  const styleConfig = sanitizeBundleStyleConfig(
+    styleRecord?.config ?? getDefaultBundleStyleConfig(),
+  );
+
+  const installationResponse = await admin.graphql(CURRENT_APP_INSTALLATION_QUERY);
+  const installationData = await installationResponse.json();
+
+  if (installationData?.errors?.length) {
+    throw new Error(installationData.errors.map((error) => error.message).join('; '));
+  }
+
+  const ownerId = installationData?.data?.currentAppInstallation?.id;
+  if (!ownerId) {
+    throw new Error('Unable to resolve current app installation ID');
+  }
+
+  const metafieldsResponse = await admin.graphql(METAFIELDS_SET_MUTATION, {
+    variables: {
+      metafields: [
+        {
+          ownerId,
+          namespace: 'smart_bundle',
+          key: 'ui_style_config',
+          type: 'json',
+          value: JSON.stringify(styleConfig),
+        },
+      ],
+    },
+  });
+
+  const metafieldsData = await metafieldsResponse.json();
+
+  if (metafieldsData?.errors?.length) {
+    const errorMessage = metafieldsData.errors.map((error) => error.message).join('; ');
+    throw new Error(errorMessage);
+  }
+
+  const userErrors = metafieldsData?.data?.metafieldsSet?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(userErrors.map((error) => error.message).join('; '));
+  }
+
+  return {
+    success: true,
+    config: styleConfig,
+  };
 }
 
 /**

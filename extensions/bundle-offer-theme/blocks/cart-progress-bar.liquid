@@ -1,8 +1,15 @@
 {% liquid
   assign active_bundles = app.metafields.smart_bundle.active_bundles.value
+  assign ui_style_config = app.metafields.smart_bundle.ui_style_config.value
+  assign sb_scope_id = 'SB_scope_progress_' | append: block.id
   assign initial_item_count = cart.item_count | default: 0
   assign milestones_json = '['
   assign milestone_count = 0
+  assign style_background_color = ui_style_config.progressBackgroundColor | default: '#f3f4f6'
+  assign style_fill_color = ui_style_config.progressFillColor | default: '#f59e0b'
+  assign style_text_color = ui_style_config.textColor | default: '#1f2937'
+  assign style_border_radius = ui_style_config.borderRadius | default: 20
+  assign style_font_size = ui_style_config.fontSize | default: 16
 
   if active_bundles != blank
     for bundle in active_bundles
@@ -88,12 +95,26 @@
 %}
 
 {% if milestone_count > 0 %}
-  <section {{ block.shopify_attributes }} class="SB_cart_progress_wrapper">
-    {% render 'sb-cart-progress',
-      milestones: milestones_json,
-      initial_item_count: initial_item_count
-    %}
-  </section>
+  {{ 'sb-styling.css' | asset_url | stylesheet_tag }}
+  {% render 'theme-bridge', scope_id: sb_scope_id, ui_style_config: ui_style_config %}
+  <div id="{{ sb_scope_id }}" class="SB_scope SB_scope--progress">
+    <section
+      {{ block.shopify_attributes }}
+      class="SB_cart_progress_wrapper SB_cart_progress__wrapper"
+      style="
+        --SB_progress-track: {{ style_background_color }};
+        --SB_progress-fill: {{ style_fill_color }};
+        --SB_progress-text: {{ style_text_color }};
+        --SB_progress-radius: {{ style_border_radius }}px;
+        --SB_progress-font-size: {{ style_font_size }}px;
+      "
+    >
+      {% render 'sb-cart-progress',
+        milestones: milestones_json,
+        initial_item_count: initial_item_count
+      %}
+    </section>
+  </div>
 {% endif %}
 
 {% schema %}

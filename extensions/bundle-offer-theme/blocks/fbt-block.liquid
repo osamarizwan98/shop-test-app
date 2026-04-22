@@ -1,8 +1,17 @@
 {% liquid
   assign active_bundles = app.metafields.smart_bundle.active_bundles.value
+  assign ui_style_config = app.metafields.smart_bundle.ui_style_config.value
   assign current_product_numeric = product.id | append: ''
   assign current_product_gid = current_product_numeric | prepend: 'gid://shopify/Product/'
   assign matched_bundle = blank
+  assign style_button_color = ui_style_config.buttonColor | default: '#2f80ed'
+  assign style_background_color = ui_style_config.cardBackgroundColor | default: '#fffaf4'
+  assign style_badge_color = ui_style_config.badgeColor | default: '#b85c38'
+  assign style_text_color = ui_style_config.textColor | default: '#24170f'
+  assign style_font_size = ui_style_config.fontSize | default: 16
+  assign style_border_radius = ui_style_config.borderRadius | default: 18
+  assign style_layout_preset = ui_style_config.layoutPreset | default: 'grid'
+  assign sb_scope_id = 'SB_scope_fbt_' | append: block.id
 
   if request.page_type != 'product' or product == blank or active_bundles == blank
     assign matched_bundle = blank
@@ -26,6 +35,8 @@
 %}
 
 {% if matched_bundle != blank and matched_bundle.products.size >= 2 %}
+  {{ 'sb-styling.css' | asset_url | stylesheet_tag }}
+  {% render 'theme-bridge', scope_id: sb_scope_id, ui_style_config: ui_style_config %}
   {% liquid
     assign total_price = 0
     assign discounted_price = 0
@@ -131,16 +142,22 @@
   %}
 
   {% unless bundle_unavailable and block.settings.hide_when_unavailable %}
-    <section
-      {{ block.shopify_attributes }}
-      class="SB_fbt_container"
-      style="
-        --SB_fbt-accent: {{ block.settings.accent_color }};
-        --SB_fbt-surface: {{ block.settings.card_background_color }};
-        --SB_fbt-border: {{ block.settings.border_color }};
-      "
-    >
-      <div class="SB_fbt_shell">
+    <div id="{{ sb_scope_id }}" class="SB_scope SB_scope--fbt">
+      <section
+        {{ block.shopify_attributes }}
+        class="SB_fbt_container SB_fbt__container"
+        style="
+          --SB_fbt-accent: {{ style_badge_color | default: block.settings.accent_color | default: '#b85c38' }};
+          --SB_fbt-button-color: {{ style_button_color }};
+          --SB_fbt-surface: {{ style_background_color | default: block.settings.card_background_color | default: '#fffaf4' }};
+          --SB_fbt-border: {{ block.settings.border_color }};
+          --SB_fbt-text: {{ style_text_color }};
+          --SB_fbt-font-size: {{ style_font_size }}px;
+          --SB_fbt-radius: {{ style_border_radius }}px;
+        "
+        data-sb-layout="{{ style_layout_preset }}"
+      >
+      <div class="SB_fbt_shell SB_fbt__shell">
         <div class="SB_fbt_header">
           <div>
             <p class="SB_fbt_eyebrow">SmartBundle AI</p>
@@ -257,7 +274,8 @@
           </p>
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   {% endunless %}
 {% endif %}
 

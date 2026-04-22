@@ -1040,3 +1040,208 @@ body {
   padding: var(--p-space-5, 1.25rem);
   background: var(--p-color-bg-surface-secondary, #f6f6f7);
 }
+
+/* ===== SMARTBUNDLE COLOR SYSTEM COMPONENTS ===== */
+body {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.SB_dashboard,
+.SB_page {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.SB_admin_container {
+  gap: 1.5rem;
+}
+
+.SB_section,
+.SB_analytics_section,
+.SB_stat-card,
+.SB_empty-state,
+.SB_empty_state_wrapper,
+.SB_card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.SB_section-header {
+  border-bottom: 1px solid var(--divider);
+}
+
+.SB_section-title,
+.SB_dashboard-title,
+.SB_headerTitle,
+.SB_empty-title,
+.SB_bundleTitle {
+  color: var(--text-primary);
+}
+
+.SB_dashboard-subtitle,
+.SB_section-note,
+.SB_empty-description,
+.SB_bundleMeta,
+.SB_stat-label {
+  color: var(--text-secondary);
+}
+
+.SB_stat-desc {
+  color: var(--text-muted);
+}
+
+.SB_uiButton {
+  align-items: center;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 2.5rem;
+  padding: 0.625rem 1rem;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.SB_uiButton--primary {
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: var(--text-inverted);
+}
+
+.SB_uiButton--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.SB_uiButton--secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.SB_uiButton--secondary:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.SB_uiButton--ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--secondary);
+}
+
+.SB_uiButton--ghost:hover:not(:disabled) {
+  background: var(--secondary-light);
+  color: var(--secondary-hover);
+}
+
+.SB_uiButton:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.SB_uiCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.SB_uiCard:hover {
+  background: var(--hover-bg);
+}
+
+.SB_uiInput {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  min-height: 2.5rem;
+  padding: 0.625rem 0.75rem;
+  width: 100%;
+}
+
+.SB_uiInput:focus {
+  border-color: var(--secondary);
+  outline: none;
+}
+
+.SB_uiInput--error {
+  border-color: var(--error);
+}
+
+.SB_uiBadge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.375rem 0.625rem;
+}
+
+.SB_uiBadge--success {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.SB_uiBadge--discount {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+}
+
+.SB_uiBadge--inactive {
+  background: var(--divider);
+  color: var(--text-muted);
+}
+
+.SB_uiTable {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.SB_uiTable th {
+  background: var(--background-section);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.SB_uiTable td {
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.SB_uiTable tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.SB_uiNotification {
+  border-radius: 0.75rem;
+  color: var(--text-inverted);
+  padding: 0.875rem 1rem;
+}
+
+.SB_uiNotification .SB_bannerText {
+  color: inherit;
+}
+
+.SB_uiNotification--success {
+  background: var(--success);
+}
+
+.SB_uiNotification--error {
+  background: var(--error);
+}
+
+.SB_uiNotification--warning {
+  background: var(--warning);
+}
+
+.SB_uiNotification--info {
+  background: var(--info);
+}

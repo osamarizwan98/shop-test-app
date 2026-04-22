@@ -1,3 +1,5 @@
+import { validateBundle } from "./bundleValidation";
+
 const PRODUCT_DISCOUNT_SELECTION_STRATEGY_FIRST = "FIRST";
 const PRODUCT_DISCOUNT_CLASS = "PRODUCT";
 const DEFAULT_MAX_DISCOUNT_CAP_PERCENT = 80;
@@ -305,50 +307,7 @@ function buildCartIndexes(lines) {
   return { linesByVariantId, linesByProductId };
 }
 
-function getAvailableLines(item, indexes) {
-  if (item.variantId) {
-    return indexes.linesByVariantId.get(item.variantId) ?? [];
-  }
-
-  if (item.productId) {
-    return indexes.linesByProductId.get(item.productId) ?? [];
-  }
-
-  return [];
-}
-
-function getAvailableQuantity(lines) {
-  return lines.reduce((total, line) => total + line.quantity, 0);
-}
-
-function buildBundleEligibleLineQuantities(bundle, indexes) {
-  const lineQuantityById = new Map();
-
-  for (const item of bundle.items) {
-    const lines = getAvailableLines(item, indexes);
-    if (lines.length === 0) {
-      continue;
-    }
-
-    for (const line of lines) {
-      const existing = lineQuantityById.get(line.id);
-      if (existing) {
-        existing.quantity = Math.max(existing.quantity, line.quantity);
-        existing.subtotalAmount = Math.max(existing.subtotalAmount, line.subtotalAmount);
-      } else {
-        lineQuantityById.set(line.id, {
-          id: line.id,
-          quantity: line.quantity,
-          subtotalAmount: line.subtotalAmount,
-        });
-      }
-    }
-  }
-
-  return Array.from(lineQuantityById.values());
-}
-
-function getDiscountPercentage(quantity, tiers) {
+function getDiscountPercentage(bundleSets, tiers) {
   let highestPercentage = 0;
 
   for (const tier of tiers) {
@@ -356,7 +315,7 @@ function getDiscountPercentage(quantity, tiers) {
       continue;
     }
 
-    if (quantity >= tier.minimumQuantity && tier.discountValue > highestPercentage) {
+    if (bundleSets >= tier.minimumQuantity && tier.discountValue > highestPercentage) {
       highestPercentage = tier.discountValue;
     }
   }
@@ -364,11 +323,11 @@ function getDiscountPercentage(quantity, tiers) {
   return highestPercentage;
 }
 
-function resolveTier(quantity, tiers) {
+function resolveTier(bundleSets, tiers) {
   let matchedTier = null;
 
   for (const tier of tiers) {
-    if (quantity >= tier.minimumQuantity) {
+    if (bundleSets >= tier.minimumQuantity) {
       matchedTier = tier;
     }
   }
@@ -376,28 +335,7 @@ function resolveTier(quantity, tiers) {
   return matchedTier;
 }
 
-function buildTargets(eligibleLines) {
-  const targets = [];
-  let targetedSubtotal = 0;
-
-  for (const line of eligibleLines) {
-    if (line.quantity <= 0) {
-      continue;
-    }
-
-    targets.push({
-      cartLine: {
-        id: line.id,
-        quantity: line.quantity,
-      },
-    });
-    targetedSubtotal += line.subtotalAmount;
-  }
-
-  return { targets, targetedSubtotal };
-}
-
-function buildDiscountValue(tier, quantity) {
+function buildDiscountValue(tier, appliedSets) {
   if (tier.discountType === "percentage") {
     return {
       percentage: {
@@ -408,12 +346,12 @@ function buildDiscountValue(tier, quantity) {
 
   return {
     fixedAmount: {
-      amount: tier.discountValue * quantity,
+      amount: tier.discountValue * appliedSets,
     },
   };
 }
 
-function estimateDiscountAmount(tier, quantity, targetedSubtotal) {
+function estimateDiscountAmount(tier, appliedSets, targetedSubtotal) {
   if (!(targetedSubtotal > 0)) {
     return 0;
   }
@@ -422,12 +360,12 @@ function estimateDiscountAmount(tier, quantity, targetedSubtotal) {
     return targetedSubtotal * (tier.discountValue / 100);
   }
 
-  return tier.discountValue * quantity;
+  return tier.discountValue * appliedSets;
 }
 
-function buildTierMessage(bundleTitle, tier, quantity, tiers) {
+function buildTierMessage(bundleTitle, tier, appliedSets, tiers) {
   if (tier.discountType === "percentage") {
-    const percentage = getDiscountPercentage(quantity, tiers);
+    const percentage = getDiscountPercentage(appliedSets, tiers);
     return `${bundleTitle} - ${percentage}% Off Applied`;
   }
 
@@ -470,7 +408,9 @@ class Validator {
   constructor(input) {
     this.input = input || {};
     this.cartLines = this.input?.cart?.lines ?? [];
-    this.activeBundles = this.input?.shop?.metafield?.jsonValue;
+    this.activeBundles =
+      this.input?.shop?.activeBundlesConfig?.jsonValue ??
+      this.input?.shop?.metafield?.jsonValue;
     this.discountClasses = this.input?.discount?.discountClasses ?? [];
     this.enteredDiscountCodes = this.input?.enteredDiscountCodes ?? [];
     this.triggeringDiscountCode = this.input?.triggeringDiscountCode ?? null;
@@ -521,35 +461,25 @@ class Validator {
     return this.orderSubtotal * (this.config.maxDiscountCapPercent / 100);
   }
 
-  buildCandidate(bundle) {
+  buildCandidate(bundle, remainingByLineId) {
     if (this.isStackingBlocked(bundle)) {
       return null;
     }
 
-    const eligibleLines = buildBundleEligibleLineQuantities(bundle, this.indexes);
-    if (eligibleLines.length === 0) {
+    const validation = validateBundle(bundle, this.indexes, remainingByLineId);
+    if (!validation) {
       return null;
     }
 
-    const totalBundleQuantity = getAvailableQuantity(eligibleLines);
-    if (totalBundleQuantity <= 0) {
-      return null;
-    }
-
-    const tier = resolveTier(totalBundleQuantity, bundle.tiers);
+    const tier = resolveTier(validation.appliedSets, bundle.tiers);
     if (!tier) {
-      return null;
-    }
-
-    const { targets, targetedSubtotal } = buildTargets(eligibleLines);
-    if (targets.length === 0 || !(targetedSubtotal > 0)) {
       return null;
     }
 
     const estimatedDiscountAmount = estimateDiscountAmount(
       tier,
-      totalBundleQuantity,
-      targetedSubtotal,
+      validation.appliedSets,
+      validation.targetedSubtotal,
     );
     const discountCapAmount = this.getOrderDiscountCapAmount();
 
@@ -558,9 +488,12 @@ class Validator {
     }
 
     return {
-      message: buildTierMessage(bundle.title, tier, totalBundleQuantity, bundle.tiers),
-      targets,
-      value: buildDiscountValue(tier, totalBundleQuantity),
+      candidate: {
+        message: buildTierMessage(bundle.title, tier, validation.appliedSets, bundle.tiers),
+        targets: validation.targets,
+        value: buildDiscountValue(tier, validation.appliedSets),
+      },
+      consumedLineQuantities: validation.consumedLineQuantities,
     };
   }
 
@@ -572,11 +505,34 @@ class Validator {
       return [];
     }
 
-    return this.activeBundles
+    const normalizedBundles = this.activeBundles
       .map((bundle) => normalizeBundle(bundle, this.config))
-      .filter(Boolean)
-      .map((bundle) => this.buildCandidate(bundle))
       .filter(Boolean);
+
+    const remainingByLineId = new Map();
+    for (const line of this.cartLines) {
+      const quantity = toPositiveInteger(line?.quantity, 0);
+      if (quantity > 0 && typeof line?.id === "string") {
+        remainingByLineId.set(line.id, quantity);
+      }
+    }
+
+    const candidates = [];
+    for (const bundle of normalizedBundles) {
+      const evaluated = this.buildCandidate(bundle, remainingByLineId);
+      if (!evaluated) {
+        continue;
+      }
+
+      for (const [lineId, consumedQuantity] of evaluated.consumedLineQuantities.entries()) {
+        const current = remainingByLineId.get(lineId) ?? 0;
+        remainingByLineId.set(lineId, Math.max(0, current - consumedQuantity));
+      }
+
+      candidates.push(evaluated.candidate);
+    }
+
+    return candidates;
   }
 }
 

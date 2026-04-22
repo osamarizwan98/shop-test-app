@@ -1,0 +1,35 @@
+{% liquid
+  assign theme_font_header = settings.type_header_font.family | default: settings.type_base_font.family | default: 'inherit'
+  assign theme_font_body = settings.type_body_font.family | default: settings.type_base_font.family | default: 'inherit'
+  assign theme_accent_color = settings.colors_accent_1 | default: settings.color_button | default: '#2f80ed'
+  assign theme_text_color = settings.colors_text | default: settings.color_foreground | default: '#1f2937'
+  assign theme_background_color = settings.colors_background_1 | default: settings.color_background | default: '#ffffff'
+  assign theme_border_color = settings.colors_line_1 | default: '#d1d5db'
+
+  assign style_button_color = ui_style_config.buttonColor | default: theme_accent_color | default: '#2f80ed'
+  assign style_background_color = ui_style_config.cardBackgroundColor | default: theme_background_color | default: '#ffffff'
+  assign style_badge_color = ui_style_config.badgeColor | default: theme_accent_color | default: '#2f80ed'
+  assign style_text_color = ui_style_config.textColor | default: theme_text_color | default: '#1f2937'
+  assign style_progress_track = ui_style_config.progressBackgroundColor | default: '#f3f4f6'
+  assign style_progress_fill = ui_style_config.progressFillColor | default: theme_accent_color | default: '#2f80ed'
+  assign style_font_size = ui_style_config.fontSize | default: 16
+  assign style_border_radius = ui_style_config.borderRadius | default: 16
+%}
+
+<style>
+  #{{ scope_id }}.SB_scope {
+    --SB_theme-font-header: {{ theme_font_header }}, var(--font-heading-family, sans-serif);
+    --SB_theme-font-body: {{ theme_font_body }}, var(--font-body-family, sans-serif);
+    --SB_theme-accent: {{ theme_accent_color }};
+    --SB_theme-text: {{ style_text_color }};
+    --SB_theme-surface: {{ style_background_color }};
+    --SB_theme-border: {{ theme_border_color }};
+    --SB_theme-button: {{ style_button_color }};
+    --SB_theme-badge: {{ style_badge_color }};
+    --SB_theme-progress-track: {{ style_progress_track }};
+    --SB_theme-progress-fill: {{ style_progress_fill }};
+    --SB_theme-font-size: {{ style_font_size }}px;
+    --SB_theme-radius: {{ style_border_radius }}px;
+    --SB_theme-z-progress: 80;
+  }
+</style>

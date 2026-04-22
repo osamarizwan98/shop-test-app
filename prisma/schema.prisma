@@ -115,3 +115,27 @@ model InventoryAnalysis {
 
   @@index([shop])
 }
+
+model BundleStyleSettings {
+  id        String   @id @default(uuid())
+  shop      String   @unique
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shop])
+}
+
+model OnboardingState {
+  id                     String   @id @default(uuid())
+  shop                   String   @unique
+  status                 String   @default("pending")
+  seededBundleId         String?
+  seededProductsCount    Int      @default(0)
+  lastError              String?
+  completedAt            DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([shop])
+}

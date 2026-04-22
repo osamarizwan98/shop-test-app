@@ -6,6 +6,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { queueInitialOnboarding } from "./services/onboarding.server.js";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -16,6 +17,15 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
+  hooks: {
+    afterAuth: async ({ admin, session }) => {
+      // Queue onboarding only once per installation so re-auths don't reseed data.
+      await queueInitialOnboarding({
+        admin,
+        shop: session?.shop,
+      });
+    },
+  },
   future: {
     expiringOfflineAccessTokens: true,
   },

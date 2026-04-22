@@ -6,6 +6,7 @@
 
     constructor(root) {
       this.root = root;
+      this.wrapper = root.closest(".SB_cart_progress_wrapper");
       this.fill = root.querySelector("[data-sb-progress-fill]");
       this.message = root.querySelector("[data-sb-progress-message]");
       this.milestonesHost = root.querySelector("[data-sb-progress-milestones]");
@@ -20,7 +21,38 @@
       }
 
       this.renderMilestones();
+      this.updateContainerStackingContext();
       this.update(this.initialCount);
+    }
+
+    updateContainerStackingContext() {
+      if (!this.wrapper) {
+        return;
+      }
+
+      const stickyCandidates = document.querySelectorAll(
+        "header, [data-sticky-header], .sticky-header, .shopify-section-header-sticky",
+      );
+      let maxBottom = 0;
+      let maxZIndex = 80;
+
+      stickyCandidates.forEach((node) => {
+        const style = window.getComputedStyle(node);
+        if (style.position !== "sticky" && style.position !== "fixed") {
+          return;
+        }
+
+        const rect = node.getBoundingClientRect();
+        maxBottom = Math.max(maxBottom, Math.max(rect.bottom, 0));
+
+        const zIndexValue = Number.parseInt(style.zIndex || "0", 10);
+        if (Number.isFinite(zIndexValue)) {
+          maxZIndex = Math.max(maxZIndex, zIndexValue + 2);
+        }
+      });
+
+      this.wrapper.style.setProperty("--SB_progress-top-offset", `${Math.ceil(maxBottom)}px`);
+      this.wrapper.style.setProperty("--SB_progress-z-index", String(maxZIndex));
     }
 
     parseMilestones(rawValue) {
@@ -234,5 +266,9 @@
 
   document.addEventListener("shopify:section:load", (event) => {
     SB_CartProgress.initialize(event.target);
+  });
+
+  window.addEventListener("resize", () => {
+    SB_CartProgress.instances.forEach((instance) => instance.updateContainerStackingContext());
   });
 })();

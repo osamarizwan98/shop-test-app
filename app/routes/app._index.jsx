@@ -4,6 +4,12 @@ import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import { AnalyticsService } from '../services/analytics.server.js';
 import { syncBundlesToShopify } from '../utils/bundleSync.js';
+import { Button } from '../components/ui/Button.jsx';
+import { Card } from '../components/ui/Card.jsx';
+import { Badge } from '../components/ui/Badge.jsx';
+import { Table } from '../components/ui/Table.jsx';
+import { Notification } from '../components/ui/Notification.jsx';
+import { chartColors } from '../components/ui/chartColors.js';
 
 async function syncActiveBundlesMetafield({ admin, shop }) {
   return await syncBundlesToShopify(admin, shop);
@@ -40,12 +46,20 @@ export async function loader({ request }) {
 
   try {
     const bundleWhere = { shop: session.shop };
-    const [bundleCount, latestBundle] = await Promise.all([
+    const [bundleCount, latestBundle, onboardingState] = await Promise.all([
       prisma.bundle.count({ where: bundleWhere }),
       prisma.bundle.findFirst({
         where: bundleWhere,
         orderBy: { updatedAt: 'desc' },
         select: { updatedAt: true },
+      }),
+      prisma.onboardingState.findFirst({
+        where: bundleWhere,
+        select: {
+          status: true,
+          seededProductsCount: true,
+          seededBundleId: true,
+        },
       }),
     ]);
 
@@ -121,6 +135,12 @@ export async function loader({ request }) {
         topBundles: Array.isArray(analyticsRaw?.topBundles) ? analyticsRaw.topBundles : [],
         trend: Array.isArray(analyticsRaw?.trend) ? analyticsRaw.trend : [],
         lastUpdatedAt: new Date().toISOString(),
+      },
+      onboarding: {
+        automaticSetupCompleted: onboardingState?.status === 'completed',
+        status: onboardingState?.status || 'pending',
+        seededProductsCount: onboardingState?.seededProductsCount || 0,
+        seededBundleId: onboardingState?.seededBundleId || null,
       },
     };
 
@@ -343,19 +363,19 @@ function renderTrendChart(series = []) {
     <div className="SB_trendChart" role="img" aria-label="Revenue trend chart">
       <svg viewBox={`0 0 ${width} ${height}`} className="SB_trendChartSvg" aria-hidden="true">
         <path className="SB_trendChartGrid" d={`M ${padding} ${height - padding} H ${width - padding}`} />
-        <path className="SB_trendChartLine SB_trendChartLine--total" d={totalPath} />
-        <path className="SB_trendChartLine SB_trendChartLine--bundle" d={bundlePath} />
+        <path className="SB_trendChartLine SB_trendChartLine--total" d={totalPath} style={{ stroke: chartColors.clicks }} />
+        <path className="SB_trendChartLine SB_trendChartLine--bundle" d={bundlePath} style={{ stroke: chartColors.revenue }} />
       </svg>
       <div className="SB_trendChartLegend">
-        <span className="SB_legendItem"><span className="SB_legendSwatch total" aria-hidden="true"></span>Total</span>
-        <span className="SB_legendItem"><span className="SB_legendSwatch bundle" aria-hidden="true"></span>Bundle</span>
+        <span className="SB_legendItem"><span className="SB_legendSwatch total" style={{ background: chartColors.clicks }} aria-hidden="true"></span>Total</span>
+        <span className="SB_legendItem"><span className="SB_legendSwatch bundle" style={{ background: chartColors.revenue }} aria-hidden="true"></span>Bundle</span>
       </div>
     </div>
   );
 }
 
 export default function AppIndex() {
-  const { bundles, stats, analytics } = useLoaderData();
+  const { bundles, stats, analytics, onboarding } = useLoaderData();
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== 'idle';
 
@@ -428,23 +448,54 @@ export default function AppIndex() {
         </div>
         <div className="SB_headerActions">
           <fetcher.Form method="post">
-            <button
+            <Button
               type="submit"
               name="intent"
               value="SYNC"
-              className="SB_secondaryButton"
+              variant="secondary"
               disabled={isSubmitting}
             >
               {isSubmitting && fetcher.formData?.get('intent') === 'SYNC'
                 ? 'Syncing...'
                 : 'Sync Now'}
-            </button>
+            </Button>
           </fetcher.Form>
-          <a href="/app/bundles/new" className="SB_primaryButton">
+          <a href="/app/bundles/new" className="SB_uiButton SB_uiButton--primary">
             Create bundle
           </a>
         </div>
       </div>
+
+      <Card as="section" className="SB_section">
+        <div className="SB_section-header">
+          <div>
+            <h2 className="SB_section-title Polaris-Text--headingLg">Welcome</h2>
+            <p className="SB_section-note">Your first-run setup status appears here automatically.</p>
+          </div>
+        </div>
+        <Notification
+          className="SB_bannerInline"
+          tone={
+            onboarding?.status === 'completed'
+              ? 'success'
+              : onboarding?.status === 'needs_products'
+                ? 'warning'
+                : onboarding?.status === 'processing'
+                  ? 'info'
+                  : 'error'
+          }
+        >
+          <p className="SB_bannerText">
+            {onboarding?.status === 'completed'
+              ? "We've automatically created your first bundle based on your top products!"
+              : onboarding?.status === 'needs_products'
+                ? 'Add Products First: we need at least 2 products in your catalog before we can generate a starter bundle.'
+                : onboarding?.status === 'processing'
+                  ? 'We are scanning your store and preparing your first smart bundle in the background.'
+                  : 'Starter setup is pending. Finish installation or reconnect the app to begin automatic bundle seeding.'}
+          </p>
+        </Notification>
+      </Card>
 
       <section className="SB_analytics_section">
         <div className="SB_analytics_header">
@@ -476,7 +527,7 @@ export default function AppIndex() {
 
         {Array.isArray(analytics?.topBundles) && analytics.topBundles.length > 0 ? (
           <div>
-            <table className="SB_table">
+            <Table className="SB_table">
               <thead>
                 <tr>
                   <th>Bundle</th>
@@ -495,7 +546,7 @@ export default function AppIndex() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         ) : (
           <div className="SB_empty_state_wrapper">
@@ -551,7 +602,7 @@ export default function AppIndex() {
           </div>
         ) : (
           <div>
-            <table className="SB_table">
+            <Table className="SB_table">
               <thead>
                 <tr>
                   <th>Title</th>
@@ -581,18 +632,18 @@ export default function AppIndex() {
                       <td>{getProductsCount(bundle.productIds)}</td>
                       <td>{formatDiscount(bundle)}</td>
                       <td>
-                        <span className={`SB_status-badge ${bundle.status === 'active' ? 'active' : 'inactive'}`}>
+                        <Badge tone={bundle.status === 'active' ? 'success' : 'inactive'}>
                           {bundle.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
+                        </Badge>
                       </td>
                       <td>
                         <fetcher.Form method="post" className="SB_actions" onSubmit={handleManagementSubmit}>
                           <input type="hidden" name="bundleId" value={bundle.id} />
-                          <button
+                          <Button
                             type="submit"
                             name="intent"
                             value="TOGGLE_STATUS"
-                            className="SB_secondaryButton"
+                            variant="secondary"
                             disabled={isPending}
                           >
                             {isPending && fetcher.formData?.get('intent') === 'TOGGLE_STATUS'
@@ -600,25 +651,26 @@ export default function AppIndex() {
                               : bundle.status === 'active'
                                 ? 'Pause'
                                 : 'Activate'}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="submit"
                             name="intent"
                             value="DELETE"
+                            variant="ghost"
                             className="SB_removeButton"
                             disabled={isPending}
                           >
                             {isPending && fetcher.formData?.get('intent') === 'DELETE'
                               ? 'Deleting...'
                               : 'Delete'}
-                          </button>
+                          </Button>
                         </fetcher.Form>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+            </Table>
           </div>
         )}
       </section>

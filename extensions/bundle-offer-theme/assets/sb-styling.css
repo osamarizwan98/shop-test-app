@@ -1,0 +1,39 @@
+.SB_scope {
+  isolation: isolate;
+}
+
+.SB_scope,
+.SB_scope * {
+  box-sizing: border-box;
+}
+
+/* High-specificity scoping to reduce theme-level overrides, including theme !important conflicts. */
+.SB_scope.SB_scope .SB_fbt_container,
+.SB_scope.SB_scope .SB_cart_progress_wrapper {
+  font-family: var(--SB_theme-font-body, var(--font-body-family, sans-serif));
+  color: var(--SB_theme-text, #1f2937);
+}
+
+.SB_scope.SB_scope .SB_fbt_heading,
+.SB_scope.SB_scope .SB_fbt_eyebrow,
+.SB_scope.SB_scope .SB_cart_progress_eyebrow {
+  font-family: var(--SB_theme-font-header, var(--font-heading-family, sans-serif));
+}
+
+.SB_scope.SB_scope .SB_fbt_container {
+  --SB_fbt-accent: var(--SB_theme-badge, #2f80ed);
+  --SB_fbt-button-color: var(--SB_theme-button, #2f80ed);
+  --SB_fbt-surface: var(--SB_theme-surface, #ffffff);
+  --SB_fbt-border: var(--SB_theme-border, #d1d5db);
+  --SB_fbt-text: var(--SB_theme-text, #1f2937);
+  --SB_fbt-font-size: var(--SB_theme-font-size, 16px);
+  --SB_fbt-radius: var(--SB_theme-radius, 16px);
+}
+
+.SB_scope.SB_scope .SB_cart_progress_wrapper {
+  --SB_progress-track: var(--SB_theme-progress-track, #f3f4f6);
+  --SB_progress-fill: var(--SB_theme-progress-fill, #2f80ed);
+  --SB_progress-text: var(--SB_theme-text, #1f2937);
+  --SB_progress-radius: var(--SB_theme-radius, 16px);
+  --SB_progress-font-size: var(--SB_theme-font-size, 16px);
+}

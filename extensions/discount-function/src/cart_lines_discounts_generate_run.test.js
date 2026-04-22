@@ -216,7 +216,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
             ],
             value: {
               fixedAmount: {
-                amount: 20,
+                amount: 10,
               },
             },
           },
@@ -226,7 +226,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
     });
   });
 
-  it("applies mix-and-match tiers using total qualifying quantity", () => {
+  it("does not apply when tier requires sets that cart does not fully satisfy", () => {
     const result = cartLinesDiscountsGenerateRun(
       buildBaseInput({
         cart: {
@@ -278,15 +278,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
       }),
     );
 
-    expect(result.operations).toHaveLength(1);
-    expect(result.operations[0].productDiscountsAdd.candidates[0]).toMatchObject({
-      message: "SB_Requires 2 Sets - 10% Off Applied",
-      value: {
-        percentage: {
-          value: 10,
-        },
-      },
-    });
+    expect(result).toEqual({ operations: [] });
   });
 
   it("blocks bundle discount when no-stacking rule is enabled and external manual code exists", () => {
@@ -456,7 +448,7 @@ describe("cartLinesDiscountsGenerateRun", () => {
     expect(result).toEqual({ operations: [] });
   });
 
-  it("does not match a bundle when variants differ", () => {
+  it("matches by product when variants differ but product ids match", () => {
     const result = cartLinesDiscountsGenerateRun(
       buildBaseInput({
         shop: {
@@ -489,7 +481,10 @@ describe("cartLinesDiscountsGenerateRun", () => {
       }),
     );
 
-    expect(result).toEqual({ operations: [] });
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].productDiscountsAdd.candidates[0]).toMatchObject({
+      message: "SB_Variant-Specific Bundle - 10% Off Applied",
+    });
   });
 
   it("supports tier maps from metafield JSON objects", () => {
@@ -525,12 +520,147 @@ describe("cartLinesDiscountsGenerateRun", () => {
 
     expect(result.operations).toHaveLength(1);
     expect(result.operations[0].productDiscountsAdd.candidates[0]).toMatchObject({
-      message: "SB_Tier Map Bundle - 15% Off Applied",
+      message: "SB_Tier Map Bundle - 10% Off Applied",
       value: {
         percentage: {
-          value: 15,
+          value: 10,
         },
       },
     });
+  });
+
+  it("applies discount only to full bundles when cart has partial extra quantity", () => {
+    const result = cartLinesDiscountsGenerateRun(
+      buildBaseInput({
+        cart: {
+          cost: { subtotalAmount: { amount: "120" } },
+          lines: [
+            createLine({
+              id: "gid://shopify/CartLine/1",
+              quantity: 2,
+              variantId: "gid://shopify/ProductVariant/1011",
+              productId: "gid://shopify/Product/101",
+              subtotalAmount: 60,
+            }),
+            createLine({
+              id: "gid://shopify/CartLine/2",
+              quantity: 1,
+              variantId: "gid://shopify/ProductVariant/2022",
+              productId: "gid://shopify/Product/202",
+              subtotalAmount: 30,
+            }),
+          ],
+        },
+        shop: {
+          metafield: {
+            jsonValue: [
+              {
+                id: "bundle-partial",
+                title: "SB_Partial Bundle",
+                products: [
+                  { id: "gid://shopify/Product/101", variantId: "gid://shopify/ProductVariant/1011" },
+                  { id: "gid://shopify/Product/202", variantId: "gid://shopify/ProductVariant/2022" },
+                ],
+                SB_tiers: [
+                  { SB_minimumQuantity: 1, SB_type: "percentage", SB_value: 10 },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].productDiscountsAdd.candidates[0]).toMatchObject({
+      targets: [
+        { cartLine: { id: "gid://shopify/CartLine/1", quantity: 1 } },
+        { cartLine: { id: "gid://shopify/CartLine/2", quantity: 1 } },
+      ],
+    });
+  });
+
+  it("counts same-product variant replacements when bundle item includes product id", () => {
+    const result = cartLinesDiscountsGenerateRun(
+      buildBaseInput({
+        cart: {
+          cost: { subtotalAmount: { amount: "80" } },
+          lines: [
+            createLine({
+              id: "gid://shopify/CartLine/1",
+              quantity: 1,
+              variantId: "gid://shopify/ProductVariant/1012",
+              productId: "gid://shopify/Product/101",
+              subtotalAmount: 40,
+            }),
+            createLine({
+              id: "gid://shopify/CartLine/2",
+              quantity: 1,
+              variantId: "gid://shopify/ProductVariant/2022",
+              productId: "gid://shopify/Product/202",
+              subtotalAmount: 40,
+            }),
+          ],
+        },
+      }),
+    );
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].productDiscountsAdd.candidates[0]).toMatchObject({
+      message: "SB_A + B Bundle - 10% Off Applied",
+    });
+  });
+
+  it("prevents quantity overlap when multiple bundles target shared lines", () => {
+    const result = cartLinesDiscountsGenerateRun(
+      buildBaseInput({
+        cart: {
+          cost: { subtotalAmount: { amount: "100" } },
+          lines: [
+            createLine({
+              id: "gid://shopify/CartLine/1",
+              quantity: 1,
+              variantId: "gid://shopify/ProductVariant/1011",
+              productId: "gid://shopify/Product/101",
+              subtotalAmount: 50,
+            }),
+            createLine({
+              id: "gid://shopify/CartLine/2",
+              quantity: 1,
+              variantId: "gid://shopify/ProductVariant/2022",
+              productId: "gid://shopify/Product/202",
+              subtotalAmount: 50,
+            }),
+          ],
+        },
+        shop: {
+          metafield: {
+            jsonValue: [
+              {
+                id: "bundle-a",
+                title: "SB_First",
+                products: [
+                  { id: "gid://shopify/Product/101", variantId: "gid://shopify/ProductVariant/1011" },
+                  { id: "gid://shopify/Product/202", variantId: "gid://shopify/ProductVariant/2022" },
+                ],
+                SB_tiers: [{ SB_minimumQuantity: 1, SB_type: "percentage", SB_value: 10 }],
+              },
+              {
+                id: "bundle-b",
+                title: "SB_Second",
+                products: [
+                  { id: "gid://shopify/Product/101", variantId: "gid://shopify/ProductVariant/1011" },
+                  { id: "gid://shopify/Product/202", variantId: "gid://shopify/ProductVariant/2022" },
+                ],
+                SB_tiers: [{ SB_minimumQuantity: 1, SB_type: "percentage", SB_value: 10 }],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(result.operations).toHaveLength(1);
+    expect(result.operations[0].productDiscountsAdd.candidates).toHaveLength(1);
   });
 });
