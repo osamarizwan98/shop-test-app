@@ -43,6 +43,7 @@
   "devDependencies": {
     "@shopify/api-codegen-preset": "^1.2.0",
     "@shopify/polaris-types": "1.0.1",
+    "@tailwindcss/vite": "^4.2.4",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.18.8",
     "@types/react": "^18.3.25",
@@ -57,6 +58,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
     "prettier": "^3.6.2",
+    "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
     "vite": "^6.3.6"
   },

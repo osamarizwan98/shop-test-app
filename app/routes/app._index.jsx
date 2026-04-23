@@ -1,708 +1,209 @@
-import { useEffect, useMemo } from 'react';
-import { isRouteErrorResponse, useFetcher, useLoaderData, useRouteError } from 'react-router';
+import { useLoaderData } from 'react-router';
+import { Link } from 'react-router';
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import { AnalyticsService } from '../services/analytics.server.js';
-import { syncBundlesToShopify } from '../utils/bundleSync.js';
-import { Button } from '../components/ui/Button.jsx';
-import { Card } from '../components/ui/Card.jsx';
-import { Badge } from '../components/ui/Badge.jsx';
-import { Table } from '../components/ui/Table.jsx';
-import { Notification } from '../components/ui/Notification.jsx';
-import { chartColors } from '../components/ui/chartColors.js';
 
-async function syncActiveBundlesMetafield({ admin, shop }) {
-  return await syncBundlesToShopify(admin, shop);
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function getProductsCount(productIds) {
-  return Array.isArray(productIds) ? productIds.length : 0;
-}
-
-function formatDiscount(bundle) {
-  if (bundle.discountType === 'percentage') {
-    return `${bundle.discountValue}%`;
-  }
-
-  return `$${Number(bundle.discountValue || 0).toFixed(2)}`;
-}
-
-function toSafeNumber(value) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function toSafeCount(value) {
-  const numeric = Math.floor(toSafeNumber(value));
-  return numeric > 0 ? numeric : 0;
+function money(v) {
+  return `$${toNum(v).toFixed(2)}`;
 }
 
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  if (!session?.shop) {
-    throw new Error('Shop information not available');
-  }
+  const [bundleCount, activeBundleCount, todayAgg, analyticsRaw] = await Promise.all([
+    prisma.bundle.count({ where: { shop } }),
+    prisma.bundle.count({ where: { shop, status: 'active' } }),
+    prisma.orderAttribution.aggregate({
+      where: { shop, isBundleOrder: true, isCanceled: false, createdAt: { gte: today } },
+      _sum: { bundleRevenue: true },
+    }),
+    AnalyticsService.getDashboardAnalytics(shop),
+  ]);
 
-  try {
-    const bundleWhere = { shop: session.shop };
-    const [bundleCount, latestBundle, onboardingState] = await Promise.all([
-      prisma.bundle.count({ where: bundleWhere }),
-      prisma.bundle.findFirst({
-        where: bundleWhere,
-        orderBy: { updatedAt: 'desc' },
-        select: { updatedAt: true },
-      }),
-      prisma.onboardingState.findFirst({
-        where: bundleWhere,
-        select: {
-          status: true,
-          seededProductsCount: true,
-          seededBundleId: true,
-        },
-      }),
-    ]);
+  const bundleRevenue = toNum(analyticsRaw.bundleRevenue);
+  const nonBundleRevenue = toNum(analyticsRaw.nonBundleRevenue);
+  const bundleOrders = Math.max(toNum(analyticsRaw.bundleOrders), 0);
+  const totalOrders = Math.max(toNum(analyticsRaw.totalOrders), 0);
+  const nonBundleOrders = Math.max(totalOrders - bundleOrders, 0);
 
-    const cacheVersion = latestBundle?.updatedAt?.toISOString() || '0';
-    const etag = `W/"sb-bundles:${session.shop}:${bundleCount}:${cacheVersion}"`;
-    const requestEtag = request.headers.get('if-none-match');
-
-    if (requestEtag === etag) {
-      return new Response(null, {
-        status: 304,
-        headers: {
-          'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
-          ETag: etag,
-        },
-      });
-    }
-
-    const [bundles, analyticsRaw] = await Promise.all([
-      prisma.bundle.findMany({
-        where: bundleWhere,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          discountType: true,
-          discountValue: true,
-          productIds: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
-      AnalyticsService.getDashboardAnalytics(session.shop),
-    ]);
-
-    const plainBundles = bundles.map((bundle) => ({
-      id: bundle.id,
-      title: bundle.title,
-      status: bundle.status,
-      discountType: bundle.discountType,
-      discountValue: bundle.discountValue,
-      productIds: Array.isArray(bundle.productIds) ? bundle.productIds : [],
-      createdAt: bundle.createdAt.toISOString(),
-      updatedAt: bundle.updatedAt.toISOString(),
-    }));
-
-    const activeBundles = plainBundles.filter((bundle) => bundle.status === 'active').length;
-    const inactiveBundles = plainBundles.filter((bundle) => bundle.status === 'inactive').length;
-
-    const safeRevenue = Number(toSafeNumber(analyticsRaw?.bundleRevenue).toFixed(2));
-    const safeNonBundleRevenue = Number(toSafeNumber(analyticsRaw?.nonBundleRevenue).toFixed(2));
-    const safeBundleSales = toSafeCount(analyticsRaw?.bundleOrders);
-    const safeTotalOrders = toSafeCount(analyticsRaw?.totalOrders);
-    const safeConversionRate = Number(toSafeNumber(analyticsRaw?.bundleConversionRate) * 100);
-    const safeUplift = Number(toSafeNumber(analyticsRaw?.revenueUplift) * 100);
-
-    const payload = {
-      bundles: plainBundles,
-      stats: {
-        totalBundles: plainBundles.length,
-        activeBundles,
-        inactiveBundles,
-      },
-      analytics: {
-        totalOrders: safeTotalOrders,
-        totalBundleSales: safeBundleSales,
-        totalRevenue: safeRevenue,
-        totalNonBundleRevenue: safeNonBundleRevenue,
-        bundleConversionRate: safeConversionRate,
-        revenueUplift: safeUplift,
-        topBundles: Array.isArray(analyticsRaw?.topBundles) ? analyticsRaw.topBundles : [],
-        trend: Array.isArray(analyticsRaw?.trend) ? analyticsRaw.trend : [],
-        lastUpdatedAt: new Date().toISOString(),
-      },
-      onboarding: {
-        automaticSetupCompleted: onboardingState?.status === 'completed',
-        status: onboardingState?.status || 'pending',
-        seededProductsCount: onboardingState?.seededProductsCount || 0,
-        seededBundleId: onboardingState?.seededBundleId || null,
-      },
-    };
-
-    return new Response(JSON.stringify(payload), {
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'private, max-age=30, stale-while-revalidate=120',
-        ETag: etag,
-      },
-    });
-  } catch (error) {
-    console.error('Error loading bundle dashboard:', error);
-    throw new Response(JSON.stringify({
-      message: 'Failed to load bundle dashboard.',
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-      },
-    });
-  }
-}
-
-export async function action({ request }) {
-  if (request.method !== 'POST') {
-    return { error: 'Invalid method.' };
-  }
-
-  const { admin, session } = await authenticate.admin(request);
-
-  if (!session?.shop) {
-    return { error: 'Shop information not available.', status: 401 };
-  }
-
-  try {
-    const formData = await request.formData();
-    const intent = formData.get('intent');
-    const bundleId = formData.get('bundleId');
-
-    if (typeof bundleId !== 'string' || bundleId.length === 0) {
-      return { error: 'Bundle ID is required.' };
-    }
-
-    const existingBundle = await prisma.bundle.findFirst({
-      where: {
-        id: bundleId,
-        shop: session.shop,
-      },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-      },
-    });
-
-    if (!existingBundle) {
-      return { error: 'Bundle not found.' };
-    }
-
-    if (intent === 'TOGGLE_STATUS') {
-      const nextStatus = existingBundle.status === 'active' ? 'inactive' : 'active';
-
-      await prisma.bundle.update({
-        where: {
-          id: existingBundle.id,
-        },
-        data: {
-          status: nextStatus,
-          inventoryHidden: false,
-        },
-      });
-
-      try {
-        await syncActiveBundlesMetafield({
-          admin,
-          shop: session.shop,
-        });
-      } catch (syncError) {
-        console.error('Metafield sync failed after bundle toggle:', syncError);
-        return {
-          error: 'Bundle status updated, but syncing active bundles to Shopify failed.',
-          syncFailed: true,
-        };
-      }
-
-      return {
-        success: true,
-        message: `Bundle "${existingBundle.title}" ${nextStatus === 'active' ? 'activated' : 'paused'} successfully.`,
-      };
-    }
-
-    if (intent === 'DELETE') {
-      await prisma.bundle.delete({
-        where: {
-          id: existingBundle.id,
-        },
-      });
-
-      try {
-        await syncActiveBundlesMetafield({
-          admin,
-          shop: session.shop,
-        });
-      } catch (syncError) {
-        console.error('Metafield sync failed after bundle deletion:', syncError);
-        return {
-          error: 'Bundle deleted, but syncing active bundles to Shopify failed.',
-          syncFailed: true,
-        };
-      }
-
-      return {
-        success: true,
-        message: `Bundle "${existingBundle.title}" deleted successfully.`,
-      };
-    }
-
-    if (intent === 'SYNC') {
-      try {
-        const syncResult = await syncActiveBundlesMetafield({
-          admin,
-          shop: session.shop,
-        });
-
-        return {
-          success: true,
-          message: `Successfully synced ${syncResult.syncedBundles} bundles to Shopify metafields.`,
-        };
-      } catch (syncError) {
-        console.error('Manual sync failed:', syncError);
-        return {
-          error: `Sync failed: ${syncError.message}`,
-        };
-      }
-    }
-
-    return { error: 'Unsupported action.' };
-  } catch (error) {
-    console.error('Error updating bundle dashboard:', error);
-    return {
-      error: error.message || 'Failed to update bundle.',
-    };
-  }
-}
-
-function formatCurrency(value) {
-  return `$${toSafeNumber(value).toFixed(2)}`;
-}
-
-function formatTimestamp(value) {
-  if (!value) {
-    return 'Just now';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'Just now';
-  }
-
-  return date.toLocaleString();
-}
-
-function renderSBStatCard({ key, label, value, icon, emphasizeValue = false }) {
-  return (
-    <article key={key} className="SB_stat-card SB_stat-card--analytics">
-      <span className="SB_stat-icon" aria-hidden="true">{icon}</span>
-      <span className="SB_stat-label">{label}</span>
-      <strong className={`SB_stat-value ${emphasizeValue ? 'SB_stat_value' : ''}`}>{value}</strong>
-    </article>
-  );
-}
-
-function renderTrendChart(series = []) {
-  const normalized = Array.isArray(series) ? series : [];
-  if (normalized.length === 0) {
-    return (
-      <div className="SB_chartEmpty">
-        <p className="SB_section-note">No trend data yet. New orders will appear here automatically.</p>
-      </div>
-    );
-  }
-
-  const points = normalized.map((entry) => {
-    const bundleRevenue = toSafeNumber(entry?.bundleRevenue);
-    const nonBundleRevenue = toSafeNumber(entry?.nonBundleRevenue);
-    return {
-      day: String(entry?.day || ''),
-      total: bundleRevenue + nonBundleRevenue,
-      bundleRevenue,
-    };
-  });
-
-  const maxValue = Math.max(...points.map((p) => p.total), 1);
-  const width = 680;
-  const height = 160;
-  const padding = 18;
-
-  const toX = (index) => {
-    if (points.length === 1) {
-      return padding;
-    }
-    const usable = width - padding * 2;
-    return padding + (usable * index) / (points.length - 1);
+  return {
+    bundleCount,
+    activeBundleCount,
+    todayRevenue: toNum(todayAgg._sum?.bundleRevenue),
+    conversionRate: toNum(analyticsRaw.bundleConversionRate) * 100,
+    bundleAov: bundleOrders > 0 ? bundleRevenue / bundleOrders : 0,
+    normalAov: nonBundleOrders > 0 ? nonBundleRevenue / nonBundleOrders : 0,
+    topBundles: (analyticsRaw.topBundles ?? []).slice(0, 3),
   };
+}
 
-  const toY = (value) => {
-    const usable = height - padding * 2;
-    return height - padding - (usable * value) / maxValue;
-  };
+const QUICK_ACTIONS = [
+  { label: 'Create Bundle', to: '/app/bundles/new', primary: true },
+  { label: 'View Analytics', to: '/app/analytics', primary: false },
+  { label: 'Manage FBT', to: '/app/fbt', primary: false },
+];
 
-  const totalPath = points
-    .map((p, index) => `${index === 0 ? 'M' : 'L'} ${toX(index)} ${toY(p.total)}`)
-    .join(' ');
-  const bundlePath = points
-    .map((p, index) => `${index === 0 ? 'M' : 'L'} ${toX(index)} ${toY(p.bundleRevenue)}`)
-    .join(' ');
+export default function Dashboard() {
+  const { bundleCount, activeBundleCount, todayRevenue, conversionRate, bundleAov, normalAov, topBundles } =
+    useLoaderData();
+
+  const kpiCards = [
+    { label: 'Bundle Revenue Today', value: money(todayRevenue), sub: 'from bundle orders today' },
+    { label: 'Conversion Rate', value: `${toNum(conversionRate).toFixed(1)}%`, sub: 'bundle orders / total orders' },
+    { label: 'Active Bundles', value: String(activeBundleCount), sub: 'currently live' },
+    { label: 'Avg Order Value', value: `${money(bundleAov)} vs ${money(normalAov)}`, sub: 'bundle vs normal' },
+  ];
 
   return (
-    <div className="SB_trendChart" role="img" aria-label="Revenue trend chart">
-      <svg viewBox={`0 0 ${width} ${height}`} className="SB_trendChartSvg" aria-hidden="true">
-        <path className="SB_trendChartGrid" d={`M ${padding} ${height - padding} H ${width - padding}`} />
-        <path className="SB_trendChartLine SB_trendChartLine--total" d={totalPath} style={{ stroke: chartColors.clicks }} />
-        <path className="SB_trendChartLine SB_trendChartLine--bundle" d={bundlePath} style={{ stroke: chartColors.revenue }} />
-      </svg>
-      <div className="SB_trendChartLegend">
-        <span className="SB_legendItem"><span className="SB_legendSwatch total" style={{ background: chartColors.clicks }} aria-hidden="true"></span>Total</span>
-        <span className="SB_legendItem"><span className="SB_legendSwatch bundle" style={{ background: chartColors.revenue }} aria-hidden="true"></span>Bundle</span>
-      </div>
-    </div>
-  );
-}
+    <div className="p-6" style={{ background: 'var(--background)', minHeight: '100vh' }}>
 
-export default function AppIndex() {
-  const { bundles, stats, analytics, onboarding } = useLoaderData();
-  const fetcher = useFetcher();
-  const isSubmitting = fetcher.state !== 'idle';
-
-  const analyticsCards = useMemo(() => ([
-    {
-      key: 'revenue',
-      label: 'Bundle Revenue',
-      value: formatCurrency(analytics?.totalRevenue),
-      icon: '$',
-      emphasizeValue: true,
-    },
-    {
-      key: 'uplift',
-      label: 'Revenue Uplift',
-      value: `${toSafeNumber(analytics?.revenueUplift).toFixed(1)}%`,
-      icon: '↑',
-      emphasizeValue: false,
-    },
-    {
-      key: 'sales',
-      label: 'Bundle Sales',
-      value: `${toSafeCount(analytics?.totalBundleSales)}`,
-      icon: '#',
-      emphasizeValue: false,
-    },
-    {
-      key: 'conversion',
-      label: 'Bundle Conversion',
-      value: `${toSafeNumber(analytics?.bundleConversionRate).toFixed(1)}%`,
-      icon: '◎',
-      emphasizeValue: false,
-    },
-  ]), [analytics?.bundleConversionRate, analytics?.revenueUplift, analytics?.totalBundleSales, analytics?.totalRevenue]);
-
-  useEffect(() => {
-    if (!fetcher.data) {
-      return;
-    }
-
-    if (fetcher.data?.success && typeof window !== 'undefined' && window.shopify?.toast) {
-      window.shopify.toast.show(fetcher.data.message || 'Bundle updated successfully.');
-    }
-
-    if (fetcher.data?.error && typeof window !== 'undefined' && window.shopify?.toast) {
-      window.shopify.toast.show(fetcher.data.error, { isError: true });
-    }
-  }, [fetcher.data]);
-
-  const handleManagementSubmit = (event) => {
-    const submitter = event.nativeEvent?.submitter;
-    const intent = submitter?.value;
-
-    if (intent === 'DELETE' && typeof window !== 'undefined') {
-      const confirmed = window.confirm('Delete this bundle? This will also remove it from the synced storefront discount rules.');
-
-      if (!confirmed) {
-        event.preventDefault();
-      }
-    }
-  };
-
-  return (
-    <div className="SB_admin_container SB_dashboard">
-      <div className="SB_header">
-        <div>
-          <h1 className="SB_dashboard-title">Bundle Management</h1>
-          <p className="SB_dashboard-subtitle">
-            View bundle performance, toggle availability, and keep Shopify metafields synced in real time.
-          </p>
+      {/* A. Welcome Banner — only if no bundles exist */}
+      {bundleCount === 0 && (
+        <div className="mb-6">
+          <s-section>
+            <div className="flex items-center justify-between p-4 flex-wrap gap-4">
+              <div>
+                <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>
+                  Welcome to SmartBundle AI
+                </p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Create your first bundle to start boosting AOV
+                </p>
+              </div>
+              <Link
+                to="/app/bundles/new"
+                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
+                style={{ background: 'var(--primary)', color: 'var(--text-inverted)' }}
+              >
+                Create your first bundle
+              </Link>
+            </div>
+          </s-section>
         </div>
-        <div className="SB_headerActions">
-          <fetcher.Form method="post">
-            <Button
-              type="submit"
-              name="intent"
-              value="SYNC"
-              variant="secondary"
-              disabled={isSubmitting}
-            >
-              {isSubmitting && fetcher.formData?.get('intent') === 'SYNC'
-                ? 'Syncing...'
-                : 'Sync Now'}
-            </Button>
-          </fetcher.Form>
-          <a href="/app/bundles/new" className="SB_uiButton SB_uiButton--primary">
-            Create bundle
-          </a>
-        </div>
+      )}
+
+      {/* B. KPI Cards Row */}
+      <div className="grid grid-cols-2 gap-4 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        {kpiCards.map((card) => (
+          <s-section key={card.label}>
+            <div className="p-5">
+              <p className="text-xs font-medium uppercase tracking-wide mb-3"
+                style={{ color: 'var(--text-secondary)' }}>
+                {card.label}
+              </p>
+              <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                {card.value}
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                {card.sub}
+              </p>
+            </div>
+          </s-section>
+        ))}
       </div>
 
-      <Card as="section" className="SB_section">
-        <div className="SB_section-header">
-          <div>
-            <h2 className="SB_section-title Polaris-Text--headingLg">Welcome</h2>
-            <p className="SB_section-note">Your first-run setup status appears here automatically.</p>
+      {/* C. Quick Actions */}
+      <div className="mb-6">
+        <s-section>
+          <div className="p-5">
+            <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+              Quick Actions
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              {QUICK_ACTIONS.map((action) => (
+                <Link
+                  key={action.label}
+                  to={action.to}
+                  className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium transition-opacity hover:opacity-90"
+                  style={
+                    action.primary
+                      ? { background: 'var(--primary)', color: 'var(--text-inverted)' }
+                      : { background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }
+                  }
+                >
+                  {action.label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-        <Notification
-          className="SB_bannerInline"
-          tone={
-            onboarding?.status === 'completed'
-              ? 'success'
-              : onboarding?.status === 'needs_products'
-                ? 'warning'
-                : onboarding?.status === 'processing'
-                  ? 'info'
-                  : 'error'
-          }
-        >
-          <p className="SB_bannerText">
-            {onboarding?.status === 'completed'
-              ? "We've automatically created your first bundle based on your top products!"
-              : onboarding?.status === 'needs_products'
-                ? 'Add Products First: we need at least 2 products in your catalog before we can generate a starter bundle.'
-                : onboarding?.status === 'processing'
-                  ? 'We are scanning your store and preparing your first smart bundle in the background.'
-                  : 'Starter setup is pending. Finish installation or reconnect the app to begin automatic bundle seeding.'}
-          </p>
-        </Notification>
-      </Card>
+        </s-section>
+      </div>
 
-      <section className="SB_analytics_section">
-        <div className="SB_analytics_header">
-          <h2 className="SB_section-title Polaris-Text--headingLg">Bundle Analytics</h2>
-          <p className="SB_section-note">Last updated: {formatTimestamp(analytics?.lastUpdatedAt)}</p>
-        </div>
-        <div className="SB_analytics_grid">
-          {analyticsCards.map((card) => renderSBStatCard(card))}
-        </div>
-      </section>
-
-      <section className="SB_section">
-        <div className="SB_section-header">
-          <div>
-            <h2 className="SB_section-title Polaris-Text--headingLg">Revenue Trend</h2>
-            <p className="SB_section-note">Daily subtotal revenue for the last 14 days.</p>
+      {/* D. Top 3 Bundles */}
+      <s-section>
+        <div className="p-5">
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Top Performing Bundles
+            </p>
+            <Link to="/app/analytics" className="text-xs" style={{ color: 'var(--secondary)' }}>
+              View all
+            </Link>
           </div>
-        </div>
-        {renderTrendChart(analytics?.trend)}
-      </section>
 
-      <section className="SB_section">
-        <div className="SB_section-header">
-          <div>
-            <h2 className="SB_section-title Polaris-Text--headingLg">Top Performing Bundles</h2>
-            <p className="SB_section-note">Ranked by attributed revenue.</p>
-          </div>
-        </div>
-
-        {Array.isArray(analytics?.topBundles) && analytics.topBundles.length > 0 ? (
-          <div>
-            <Table className="SB_table">
+          {topBundles.length === 0 ? (
+            <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+              No bundle sales yet. Create a bundle to start tracking revenue.
+            </p>
+          ) : (
+            <table className="w-full text-sm border-collapse">
               <thead>
-                <tr>
-                  <th>Bundle</th>
-                  <th>Conversions</th>
-                  <th>Revenue</th>
+                <tr style={{ background: 'var(--background-section)', borderBottom: '1px solid var(--border)' }}>
+                  <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: 'var(--text-secondary)' }}>Bundle</th>
+                  <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: 'var(--text-secondary)' }}>Revenue</th>
+                  <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: 'var(--text-secondary)' }}>Conversions</th>
                 </tr>
               </thead>
               <tbody>
-                {analytics.topBundles.map((entry) => (
-                  <tr key={entry.bundleId}>
-                    <td>
-                      <strong className="SB_bundleTitle">{entry.bundleTitle || entry.bundleId}</strong>
+                {topBundles.map((b, i) => (
+                  <tr key={b.bundleId} style={{ borderBottom: '1px solid var(--divider)' }}>
+                    <td className="py-3 px-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>#{i + 1}</span>
+                      {b.bundleTitle || b.bundleId}
                     </td>
-                    <td>{toSafeCount(entry.conversions)}</td>
-                    <td>{formatCurrency(entry.revenue)}</td>
+                    <td className="py-3 px-3" style={{ color: 'var(--text-primary)' }}>{money(b.revenue)}</td>
+                    <td className="py-3 px-3" style={{ color: 'var(--text-primary)' }}>{b.conversions}</td>
                   </tr>
                 ))}
               </tbody>
-            </Table>
-          </div>
-        ) : (
-          <div className="SB_empty_state_wrapper">
-            <div className="SB_banner SB_bannerInline">
-              <p className="SB_bannerText">No bundle conversions yet. Once orders come in, leaderboard data will appear here.</p>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <div className="SB_stats-grid">
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Total bundles</span>
-          <strong className="SB_stat-value">{stats.totalBundles}</strong>
-        </article>
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Active bundles</span>
-          <strong className="SB_stat-value">{stats.activeBundles}</strong>
-        </article>
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Inactive bundles</span>
-          <strong className="SB_stat-value">{stats.inactiveBundles}</strong>
-        </article>
-        <article className="SB_stat-card">
-          <span className="SB_stat-label">Total orders tracked</span>
-          <strong className="SB_stat-value">{toSafeCount(analytics?.totalOrders)}</strong>
-        </article>
-      </div>
-
-      <section className="SB_section">
-        <div className="SB_section-header">
-          <div>
-            <h2 className="SB_section-title Polaris-Text--headingLg">Your bundles</h2>
-            <p className="SB_section-note">
-              Any status or delete action immediately refreshes the synced `active_bundles` metafield.
-            </p>
-          </div>
+            </table>
+          )}
         </div>
-
-        {bundles.length === 0 ? (
-          <div className="SB_empty_state_wrapper">
-            <div className="Polaris-EmptyState">
-              <div className="Polaris-EmptyState__Section">
-                <p className="Polaris-Text--headingMd">No bundles created yet</p>
-                <p className="Polaris-Text--bodyMd SB_empty-description">
-                  Create your first bundle to start syncing automatic discount rules to Shopify.
-                </p>
-                <a href="/app/bundles/new" className="SB_primaryButton">
-                  Create first bundle
-                </a>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <Table className="SB_table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Products Count</th>
-                  <th>Discount</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bundles.map((bundle) => {
-                  const isPending = isSubmitting && (
-                    fetcher.formData?.get('bundleId') === bundle.id ||
-                    fetcher.formData?.get('intent') === 'SYNC'
-                  );
-
-                  return (
-                    <tr key={bundle.id}>
-                      <td>
-                        <div>
-                          <strong className="SB_bundleTitle">{bundle.title}</strong>
-                          <div className="SB_bundleMeta">
-                            Updated {new Date(bundle.updatedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </td>
-                      <td>{getProductsCount(bundle.productIds)}</td>
-                      <td>{formatDiscount(bundle)}</td>
-                      <td>
-                        <Badge tone={bundle.status === 'active' ? 'success' : 'inactive'}>
-                          {bundle.status === 'active' ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-                      <td>
-                        <fetcher.Form method="post" className="SB_actions" onSubmit={handleManagementSubmit}>
-                          <input type="hidden" name="bundleId" value={bundle.id} />
-                          <Button
-                            type="submit"
-                            name="intent"
-                            value="TOGGLE_STATUS"
-                            variant="secondary"
-                            disabled={isPending}
-                          >
-                            {isPending && fetcher.formData?.get('intent') === 'TOGGLE_STATUS'
-                              ? 'Saving...'
-                              : bundle.status === 'active'
-                                ? 'Pause'
-                                : 'Activate'}
-                          </Button>
-                          <Button
-                            type="submit"
-                            name="intent"
-                            value="DELETE"
-                            variant="ghost"
-                            className="SB_removeButton"
-                            disabled={isPending}
-                          >
-                            {isPending && fetcher.formData?.get('intent') === 'DELETE'
-                              ? 'Deleting...'
-                              : 'Delete'}
-                          </Button>
-                        </fetcher.Form>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </div>
-        )}
-      </section>
+      </s-section>
     </div>
   );
 }
 
 export function ErrorBoundary() {
-  const error = useRouteError();
-  let errorMessage = 'Something went wrong while loading SmartBundle AI.';
-
-  if (isRouteErrorResponse(error)) {
-    errorMessage = error?.data?.message || error.statusText || errorMessage;
-  } else if (error instanceof Error) {
-    errorMessage = error.message;
-  }
-
   return (
-    <div className="SB_admin_container SB_dashboard">
-      <div className="SB_empty_state_wrapper SB_error_boundary">
-        <div className="SB_banner SB_banner-error">
-          <p className="SB_empty-title">Something went wrong</p>
-          <p className="SB_empty-description">{errorMessage}</p>
+    <div className="p-6">
+      <s-section>
+        <div className="p-6 text-center">
+          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Something went wrong
+          </p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            Failed to load the dashboard. Please refresh.
+          </p>
           <button
             type="button"
-            className="SB_primaryButton"
+            className="mt-4 px-4 py-2 rounded-md text-sm font-medium"
+            style={{ background: 'var(--primary)', color: 'var(--text-inverted)' }}
             onClick={() => window.location.reload()}
           >
-            Refresh page
+            Refresh
           </button>
         </div>
-      </div>
+      </s-section>
     </div>
   );
 }

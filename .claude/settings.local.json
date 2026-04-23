@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat vite.config.ts)",
+      "Bash(cat vite.config.js)"
+    ]
+  }
+}
