@@ -251,21 +251,24 @@ export async function syncBundleStyleConfigToShopify(admin, shop) {
 export async function checkProductCollisions(shop, productIds, excludeBundleId = null) {
   const collisions = [];
 
-  // Find all active bundles that contain any of the specified products
-  const conflictingBundles = await prisma.bundle.findMany({
+  // Find all active bundles for shop (hasSome is PostgreSQL-only, filter in JS instead)
+  const allBundles = await prisma.bundle.findMany({
     where: {
       shop,
       status: 'active',
       ...(excludeBundleId && { id: { not: excludeBundleId } }),
-      productIds: {
-        hasSome: productIds,
-      },
     },
     select: {
       id: true,
       title: true,
       productIds: true,
     },
+  });
+
+  const conflictingBundles = allBundles.filter(bundle => {
+    const ids = bundle.productIds;
+    if (!Array.isArray(ids) || ids.length === 0) return false;
+    return ids.some(pid => productIds.includes(pid));
   });
 
   // Analyze collisions

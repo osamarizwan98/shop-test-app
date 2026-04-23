@@ -67,14 +67,12 @@
       {% endif %}
     {% endfor %}
   {% endcapture %}
-
   {% capture variant_titles_string %}
     {% for bundle_item in matched_bundle.products %}
       {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id %}
       {{ item_title }}{% unless forloop.last %}|~|{% endunless %}
     {% endfor %}
   {% endcapture %}
-
   {% assign discount_type = matched_bundle.discountType | default: matched_bundle.type | default: 'percentage' %}
   {% assign discount_value = matched_bundle.discountValue | default: matched_bundle.value | default: 0 | plus: 0 %}
   {% assign offer_label = block.settings.heading | default: 'SmartBundle AI recommendation' %}
@@ -95,163 +93,161 @@
     <aside
       {{ block.shopify_attributes }}
       class="SB_BUNDLE_CARD SB_js_bundle_offer"
-      style="background: {{ block.settings.card_background_color | default: '#ffffff' }}; border-color: {{ block.settings.border_color | default: '#dbe4ef' }}; color: var(--color-base-text, #111111);"
-    >
-    <div class="SB_BUNDLE_CARD_HEADER">
-      <div>
-        <h2 class="SB_BUNDLE_CARD_TITLE" style="font-size: {{ block.settings.heading_font_size | default: 22 }}px;">{{ offer_label }}</h2>
-        <p class="SB_BUNDLE_CARD_DESCRIPTION" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">{{ body_text }}</p>
+      style="background: {{ block.settings.card_background_color | default: '#ffffff' }}; border-color: {{ block.settings.border_color | default: '#dbe4ef' }}; color: var(--color-base-text, #111111);">
+      <div class="SB_BUNDLE_CARD_HEADER">
+        <div>
+          <h2 class="SB_BUNDLE_CARD_TITLE" style="font-size: {{ block.settings.heading_font_size | default: 22 }}px;">{{ offer_label }}</h2>
+          <p class="SB_BUNDLE_CARD_DESCRIPTION" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">{{ body_text }}</p>
+        </div>
+        <span class="SB_BUNDLE_CARD_BADGE" style="background: {{ block.settings.accent_color | default: '#2f80ed' }};">{{ badge_text }}</span>
       </div>
-      <span class="SB_BUNDLE_CARD_BADGE" style="background: {{ block.settings.accent_color | default: '#2f80ed' }};">{{ badge_text }}</span>
-    </div>
 
-    <p class="SB_BUNDLE_CARD_SAVINGS" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">
-      {{ block.settings.success_prefix | default: 'Potential savings:' }} <span>{{ formatted_savings }}</span>
-    </p>
+      <p class="SB_BUNDLE_CARD_SAVINGS" style="font-size: {{ block.settings.text_font_size | default: 16 }}px;">
+        {{ block.settings.success_prefix | default: 'Potential savings:' }}
+        <span>{{ formatted_savings }}</span>
+      </p>
 
-    <ul class="SB_BUNDLE_CARD_PRODUCT_LIST">
-      {% for bundle_item in matched_bundle.products %}
-        {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id %}
-        {% assign item_id = bundle_item.id | default: bundle_item | append: '' %}
-        {% assign is_current_product = false %}
-        {% if item_title == blank %}
-          {% capture item_title %}{{ 'smart_bundle.bundle_item' | t }} {{ forloop.index }}{% endcapture %}
-        {% endif %}
-        {% if item_id == current_product_gid %}
-          {% assign is_current_product = true %}
-        {% elsif item_id == current_product_numeric %}
-          {% assign is_current_product = true %}
-        {% endif %}
-        <li class="SB_BUNDLE_CARD_PRODUCT_ITEM">
-          <p class="SB_BUNDLE_CARD_PRODUCT_TITLE">{{ item_title }}</p>
-          <p class="SB_BUNDLE_CARD_PRODUCT_META">
-            {% if is_current_product %}
-              {{ 'smart_bundle.current_product' | t }}
-            {% else %}
-              {{ 'smart_bundle.add_to_complete' | t }}
-            {% endif %}
-          </p>
-        </li>
-      {% endfor %}
-    </ul>
+      <ul class="SB_BUNDLE_CARD_PRODUCT_LIST">
+        {% for bundle_item in matched_bundle.products %}
+          {% assign item_title = bundle_item.title | default: bundle_item.handle | default: bundle_item.id %}
+          {% assign item_id = bundle_item.id | default: bundle_item | append: '' %}
+          {% assign is_current_product = false %}
+          {% if item_title == blank %}
+            {% capture item_title %}{{ 'smart_bundle.bundle_item' | t }} {{ forloop.index }}{% endcapture %}
+          {% endif %}
+          {% if item_id == current_product_gid %}
+            {% assign is_current_product = true %}
+          {% elsif item_id == current_product_numeric %}
+            {% assign is_current_product = true %}
+          {% endif %}
+          <li class="SB_BUNDLE_CARD_PRODUCT_ITEM">
+            <p class="SB_BUNDLE_CARD_PRODUCT_TITLE">{{ item_title }}</p>
+            <p class="SB_BUNDLE_CARD_PRODUCT_META">
+              {% if is_current_product %}
+                {{ 'smart_bundle.current_product' | t }}
+              {% else %}
+                {{ 'smart_bundle.add_to_complete' | t }}
+              {% endif %}
+            </p>
+          </li>
+        {% endfor %}
+      </ul>
 
-    {% if quick_add_available %}
-      <button
-        type="button"
-        class="SB_add_button SB_js_quick_add"
-        style="background: {{ block.settings.accent_color | default: '#2f80ed' }};"
-        data-sb-variants="{{ variant_ids_string | strip_newlines | strip | escape }}"
-        data-sb-variant-names="{{ variant_titles_string | strip_newlines | strip | escape }}"
-        data-sb-bundle-id="{{ matched_bundle.id | escape }}"
-        data-sb-bundle-title="{{ matched_bundle.title | default: offer_label | escape }}"
-        data-default-text="{{ button_label | escape }}"
-        onclick="SB_addBundleToCartFromButton(this)"
-      >
-        {{ button_label }}
-      </button>
-      <div class="SB_error_message" role="alert" aria-live="assertive"></div>
-    {% else %}
-      <button
-        type="button"
-        class="SB_add_button SB_add_button--disabled"
-        disabled
-        aria-disabled="true"
-        style="background: #9ea8b6;"
-      >
-        {{ button_label }}
-      </button>
-      <div class="SB_error_message" role="alert" aria-live="assertive">Bundle currently unavailable</div>
-    {% endif %}
-
-    <p class="SB_BUNDLE_CARD_NOTICE">
       {% if quick_add_available %}
-        {{ 'smart_bundle.notice' | t }}
-      {% elsif bundle_item_count > 1 %}
-        {{ 'smart_bundle.missing_variant' | t }}
+        <button
+          type="button"
+          class="SB_add_button SB_js_quick_add"
+          style="background: {{ block.settings.accent_color | default: '#2f80ed' }};"
+          data-sb-variants="{{ variant_ids_string | strip_newlines | strip | escape }}"
+          data-sb-variant-names="{{ variant_titles_string | strip_newlines | strip | escape }}"
+          data-sb-bundle-id="{{ matched_bundle.id | escape }}"
+          data-sb-bundle-title="{{ matched_bundle.title | default: offer_label | escape }}"
+          data-default-text="{{ button_label | escape }}"
+          onclick="SB_addBundleToCartFromButton(this)">
+          {{ button_label }}
+        </button>
+        <div
+          class="SB_error_message"
+          role="alert"
+          aria-live="assertive"></div>
+      {% else %}
+        <button
+          type="button"
+          class="SB_add_button SB_add_button--disabled"
+          disabled
+          aria-disabled="true"
+          style="background: #9ea8b6;">
+          {{ button_label }}
+        </button>
+        <div
+          class="SB_error_message"
+          role="alert"
+          aria-live="assertive">Bundle currently unavailable</div>
       {% endif %}
-    </p>
-  </aside>
+
+      <p class="SB_BUNDLE_CARD_NOTICE">
+        {% if quick_add_available %}
+          {{ 'smart_bundle.notice' | t }}
+        {% elsif bundle_item_count > 1 %}
+          {{ 'smart_bundle.missing_variant' | t }}
+        {% endif %}
+      </p>
+    </aside>
   </div>
 {% endif %}
 
 {% schema %}
-{
-  "name": "t:blocks.bundle_offer.name",
-  "target": "section",
-  "stylesheet": "bundle-offer-theme.css",
-  "javascript": "sb-logic.js",
-  "enabled_on": {
-    "templates": ["product"]
-  },
-  "settings": [
-    {
-      "type": "text",
-      "id": "heading",
-      "label": "t:blocks.bundle_offer.settings.heading",
-      "default": "SmartBundle AI recommendation"
+  {
+    "name": "t:blocks.bundle_offer.name",
+    "target": "section",
+    "stylesheet": "bundle-offer-theme.css",
+    "javascript": "sb-logic.js",
+    "enabled_on": {
+      "templates": ["product"]
     },
-    {
-      "type": "text",
-      "id": "badge_text",
-      "label": "t:blocks.bundle_offer.settings.badge_text",
-      "default": "Limited Time Offer"
-    },
-    {
-      "type": "text",
-      "id": "success_prefix",
-      "label": "t:blocks.bundle_offer.settings.success_prefix",
-      "default": "Potential savings:"
-    },
-    {
-      "type": "textarea",
-      "id": "body_text",
-      "label": "t:blocks.bundle_offer.settings.body_text",
-      "default": "Add the full bundle to your cart to unlock the automatic discount immediately."
-    },
-    {
-      "type": "text",
-      "id": "button_text",
-      "label": "t:blocks.bundle_offer.settings.button_text",
-      "default": "Quick Add Bundle"
-    },
-    {
-      "type": "color",
-      "id": "card_background_color",
-      "label": "t:blocks.bundle_offer.settings.card_background_color",
-      "default": "#ffffff"
-    },
-    {
-      "type": "color",
-      "id": "border_color",
-      "label": "t:blocks.bundle_offer.settings.border_color",
-      "default": "#dbe4ef"
-    },
-    {
-      "type": "color",
-      "id": "accent_color",
-      "label": "t:blocks.bundle_offer.settings.accent_color",
-      "default": "#2f80ed"
-    },
-    {
-      "type": "range",
-      "id": "heading_font_size",
-      "label": "t:blocks.bundle_offer.settings.heading_font_size",
-      "default": 22,
-      "min": 16,
-      "max": 34,
-      "step": 1,
-      "unit": "px"
-    },
-    {
-      "type": "range",
-      "id": "text_font_size",
-      "label": "t:blocks.bundle_offer.settings.text_font_size",
-      "default": 16,
-      "min": 12,
-      "max": 22,
-      "step": 1,
-      "unit": "px"
-    }
-  ]
-}
+    "settings": [
+      {
+        "type": "text",
+        "id": "heading",
+        "label": "t:blocks.bundle_offer.settings.heading",
+        "default": "SmartBundle AI recommendation"
+      },
+      {
+        "type": "text",
+        "id": "badge_text",
+        "label": "t:blocks.bundle_offer.settings.badge_text",
+        "default": "Limited Time Offer"
+      },
+      {
+        "type": "text",
+        "id": "success_prefix",
+        "label": "t:blocks.bundle_offer.settings.success_prefix",
+        "default": "Potential savings:"
+      },
+      {
+        "type": "textarea",
+        "id": "body_text",
+        "label": "t:blocks.bundle_offer.settings.body_text",
+        "default": "Add the full bundle to your cart to unlock the automatic discount immediately."
+      }, {
+        "type": "text",
+        "id": "button_text",
+        "label": "t:blocks.bundle_offer.settings.button_text",
+        "default": "Quick Add Bundle"
+      }, {
+        "type": "color",
+        "id": "card_background_color",
+        "label": "t:blocks.bundle_offer.settings.card_background_color",
+        "default": "#ffffff"
+      }, {
+        "type": "color",
+        "id": "border_color",
+        "label": "t:blocks.bundle_offer.settings.border_color",
+        "default": "#dbe4ef"
+      }, {
+        "type": "color",
+        "id": "accent_color",
+        "label": "t:blocks.bundle_offer.settings.accent_color",
+        "default": "#2f80ed"
+      }, {
+        "type": "range",
+        "id": "heading_font_size",
+        "label": "t:blocks.bundle_offer.settings.heading_font_size",
+        "default": 22,
+        "min": 16,
+        "max": 34,
+        "step": 1,
+        "unit": "px"
+      }, {
+        "type": "range",
+        "id": "text_font_size",
+        "label": "t:blocks.bundle_offer.settings.text_font_size",
+        "default": 16,
+        "min": 12,
+        "max": 22,
+        "step": 1,
+        "unit": "px"
+      }
+    ]
+  }
 {% endschema %}

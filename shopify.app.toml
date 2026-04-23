@@ -13,40 +13,16 @@ dev_store_url = "social-feeds-insta.myshopify.com"
 api_version = "2026-07"
 
   [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
-  uri = "/webhooks/app/scopes_update"
-
-  [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
   uri = "/webhooks/app/uninstalled"
 
   [[webhooks.subscriptions]]
-  topics = [ "products/delete" ]
-  uri = "/webhooks/products/delete"
-
-  [[webhooks.subscriptions]]
-  topics = [ "products/update" ]
-  uri = "/webhooks/products/update"
-
-  [[webhooks.subscriptions]]
-  topics = [ "inventory_levels/update" ]
-  uri = "/webhooks/inventory_levels/update"
-
-  [[webhooks.subscriptions]]
-  topics = [ "orders/create" ]
-  uri = "/webhooks/app/orders_create"
-
-  [[webhooks.subscriptions]]
-  topics = [ "orders/cancelled" ]
-  uri = "/webhooks/app/orders_cancelled"
-
-  [[webhooks.subscriptions]]
-  topics = [ "refunds/create" ]
-  uri = "/webhooks/app/refunds_create"
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_inventory,write_metaobjects,write_metaobject_definitions,write_discounts"
+scopes = "write_discounts,write_metaobject_definitions,write_metaobjects,write_products"
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]

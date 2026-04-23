@@ -307,22 +307,6 @@ function buildCartIndexes(lines) {
   return { linesByVariantId, linesByProductId };
 }
 
-function getDiscountPercentage(bundleSets, tiers) {
-  let highestPercentage = 0;
-
-  for (const tier of tiers) {
-    if (tier.discountType !== "percentage") {
-      continue;
-    }
-
-    if (bundleSets >= tier.minimumQuantity && tier.discountValue > highestPercentage) {
-      highestPercentage = tier.discountValue;
-    }
-  }
-
-  return highestPercentage;
-}
-
 function resolveTier(bundleSets, tiers) {
   let matchedTier = null;
 
@@ -363,10 +347,9 @@ function estimateDiscountAmount(tier, appliedSets, targetedSubtotal) {
   return tier.discountValue * appliedSets;
 }
 
-function buildTierMessage(bundleTitle, tier, appliedSets, tiers) {
+function buildTierMessage(bundleTitle, tier) {
   if (tier.discountType === "percentage") {
-    const percentage = getDiscountPercentage(appliedSets, tiers);
-    return `${bundleTitle} - ${percentage}% Off Applied`;
+    return `${bundleTitle} - ${tier.discountValue}% Off Applied`;
   }
 
   return `${bundleTitle} - Bundle Savings Applied`;
@@ -408,9 +391,7 @@ class Validator {
   constructor(input) {
     this.input = input || {};
     this.cartLines = this.input?.cart?.lines ?? [];
-    this.activeBundles =
-      this.input?.shop?.activeBundlesConfig?.jsonValue ??
-      this.input?.shop?.metafield?.jsonValue;
+    this.activeBundles = this.input?.shop?.activeBundlesConfig?.jsonValue ?? [];
     this.discountClasses = this.input?.discount?.discountClasses ?? [];
     this.enteredDiscountCodes = this.input?.enteredDiscountCodes ?? [];
     this.triggeringDiscountCode = this.input?.triggeringDiscountCode ?? null;
@@ -489,7 +470,7 @@ class Validator {
 
     return {
       candidate: {
-        message: buildTierMessage(bundle.title, tier, validation.appliedSets, bundle.tiers),
+        message: buildTierMessage(bundle.title, tier),
         targets: validation.targets,
         value: buildDiscountValue(tier, validation.appliedSets),
       },

@@ -9,13 +9,6 @@ query CartInput {
     lines {
       id
       quantity
-      attribute(key: "_sb_bundle_id") {
-        value
-      }
-      attribute {
-        key
-        value
-      }
       cost {
         subtotalAmount {
           amount
@@ -43,9 +36,6 @@ query CartInput {
   triggeringDiscountCode
   shop {
     activeBundlesConfig: metafield(namespace: "smart_bundle", key: "active_bundles") {
-      jsonValue
-    }
-    metafield(namespace: "smart_bundle", key: "active_bundles") {
       jsonValue
     }
   }

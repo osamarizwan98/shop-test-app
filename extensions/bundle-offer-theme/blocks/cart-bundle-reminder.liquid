@@ -52,20 +52,11 @@
           assign products_json = products_json | append: ','
         endif
 
-        assign products_json = products_json
-          | append: '{"variantId":'
-          | append: resolved_variant_id | json
-          | append: ',"title":'
-          | append: title | json
-          | append: ',"handle":'
-          | append: handle | json
-          | append: ',"image":'
-          | append: image_url | json
-          | append: ',"available":'
-          | append: available
-          | append: ',"priceCents":'
-          | append: price_cents
-          | append: '}'
+        assign sb_vid_json = resolved_variant_id | json
+        assign sb_title_json = title | json
+        assign sb_handle_json = handle | json
+        assign sb_image_json = image_url | json
+        assign products_json = products_json | append: '{"variantId":' | append: sb_vid_json | append: ',"title":' | append: sb_title_json | append: ',"handle":' | append: sb_handle_json | append: ',"image":' | append: sb_image_json | append: ',"available":' | append: available | append: ',"priceCents":' | append: price_cents | append: '}'
 
         assign product_count = product_count | plus: 1
         assign bundle_total_cents = bundle_total_cents | plus: price_cents
@@ -101,20 +92,11 @@
         assign bundles_json = bundles_json | append: ','
       endif
 
-      assign bundles_json = bundles_json
-        | append: '{"id":'
-        | append: bundle.id | json
-        | append: ',"title":'
-        | append: bundle.title | default: 'Bundle' | json
-        | append: ',"type":'
-        | append: discount_type | json
-        | append: ',"value":'
-        | append: discount_value
-        | append: ',"savingsMoney":'
-        | append: savings_money | json
-        | append: ',"products":'
-        | append: products_json
-        | append: '}'
+      assign sb_bid_json = bundle.id | json
+      assign sb_btitle_json = bundle.title | default: 'Bundle' | json
+      assign sb_dtype_json = discount_type | json
+      assign sb_savings_json = savings_money | json
+      assign bundles_json = bundles_json | append: '{"id":' | append: sb_bid_json | append: ',"title":' | append: sb_btitle_json | append: ',"type":' | append: sb_dtype_json | append: ',"value":' | append: discount_value | append: ',"savingsMoney":' | append: sb_savings_json | append: ',"products":' | append: products_json | append: '}'
 
       assign bundle_count = bundle_count | plus: 1
     %}
@@ -135,8 +117,6 @@
 {
   "name": "Cart Bundle Reminder",
   "target": "section",
-  "stylesheet": "sb-cart-bundle-reminder.css",
-  "javascript": "sb-cart-bundle-reminder.js",
   "settings": []
 }
 {% endschema %}
