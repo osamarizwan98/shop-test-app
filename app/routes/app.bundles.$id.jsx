@@ -1,20 +1,25 @@
-import { Link } from 'react-router';
+import { useLoaderData, Link } from 'react-router';
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import BundleForm from '../components/BundleForm';
 
-export async function loader({ request }) {
-  await authenticate.admin(request);
-  return {};
+export async function loader({ request, params }) {
+  const { session } = await authenticate.admin(request);
+  const bundle = await prisma.bundle.findFirst({
+    where: { id: params.id, shop: session.shop },
+  });
+  if (!bundle) throw new Response('Bundle not found', { status: 404 });
+  return { bundle };
 }
 
-export async function action({ request }) {
+export async function action({ request, params }) {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
 
-  if (intent !== 'create') return { error: 'Invalid intent' };
+  if (intent !== 'update') return { error: 'Invalid intent' };
 
+  const id = String(formData.get('id') ?? params.id ?? '');
   const title = String(formData.get('title') ?? '').trim();
   const discountType = String(formData.get('discountType') ?? '');
   const discountValue = parseFloat(String(formData.get('discountValue') ?? '0'));
@@ -33,9 +38,15 @@ export async function action({ request }) {
   if (isNaN(discountValue) || discountValue < 0)
     return { error: 'Invalid discount value' };
 
-  await prisma.bundle.create({
+  const existing = await prisma.bundle.findFirst({
+    where: { id, shop: session.shop },
+    select: { id: true },
+  });
+  if (!existing) return { error: 'Bundle not found' };
+
+  await prisma.bundle.update({
+    where: { id },
     data: {
-      shop: session.shop,
       title,
       discountType,
       discountValue,
@@ -47,7 +58,9 @@ export async function action({ request }) {
   return { success: true };
 }
 
-export default function NewBundle() {
+export default function EditBundle() {
+  const { bundle } = useLoaderData();
+
   return (
     <div className="p-6" style={{ background: 'var(--background)', minHeight: '100vh' }}>
 
@@ -62,11 +75,13 @@ export default function NewBundle() {
         </Link>
         <span style={{ color: 'var(--border)' }}>/</span>
         <p className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-          Create Bundle
+          Edit Bundle
         </p>
       </div>
 
-      <BundleForm intent="create" />
+      {/* key=bundle.id ensures BundleForm re-mounts fresh if the user navigates
+          between different edit pages without a full page reload */}
+      <BundleForm key={bundle.id} bundle={bundle} intent="update" />
     </div>
   );
 }
@@ -77,16 +92,18 @@ export function ErrorBoundary() {
       <s-section>
         <div className="p-6 text-center">
           <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Failed to load
+            Bundle not found
           </p>
-          <button
-            type="button"
-            className="mt-4 px-4 py-2 rounded-md text-sm font-medium"
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            This bundle may have been deleted.
+          </p>
+          <Link
+            to="/app/bundles"
+            className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium mt-4"
             style={{ background: 'var(--primary)', color: '#fff' }}
-            onClick={() => window.location.reload()}
           >
-            Refresh
-          </button>
+            Back to Bundles
+          </Link>
         </div>
       </s-section>
     </div>

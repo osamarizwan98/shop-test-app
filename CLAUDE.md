@@ -32,6 +32,13 @@ https://github.com/Shopify/shopify-app-template-react-router
 --text-secondary: #6B7280
 --border: #E5E7EB
 
+## Custom CSS Classes — Naming Convention
+- All custom CSS classes MUST use BS_ prefix
+- Examples: BS_card, BS_hero-section, BS_bundle-grid
+- Tailwind utility classes → no prefix needed (they are not custom)
+- Polaris Web Components → no prefix needed (s- prefix already there)
+- Never use generic names like .card, .button, .wrapper without BS_ prefix
+
 ## Rules for Code Agent
 - Always use loader/action pattern — NO separate API files
 - Always authenticate: const { admin, session } = await authenticate.admin(request)
