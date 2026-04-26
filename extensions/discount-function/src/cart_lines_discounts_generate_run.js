@@ -41,6 +41,10 @@ function normalizeDiscountType(value) {
     return "fixed_amount";
   }
 
+  if (normalized === "bogo") {
+    return "bogo";
+  }
+
   return null;
 }
 
@@ -168,9 +172,18 @@ function normalizeTier(rawTier) {
 
 function buildLegacyTier(bundle) {
   const discountType = normalizeDiscountType(bundle?.type ?? bundle?.SB_type);
+
+  if (!discountType) {
+    return null;
+  }
+
+  if (discountType === "bogo") {
+    return { minimumQuantity: 1, discountType: "bogo", discountValue: 100 };
+  }
+
   const discountValue = toPositiveNumber(bundle?.value ?? bundle?.SB_value);
 
-  if (!discountType || !discountValue) {
+  if (!discountValue) {
     return null;
   }
 
@@ -274,6 +287,7 @@ function normalizeBundle(bundle, globalConfig) {
 function buildCartIndexes(lines) {
   const linesByVariantId = new Map();
   const linesByProductId = new Map();
+  const lineById = new Map();
 
   for (const line of lines) {
     const quantity = toPositiveInteger(line?.quantity, 0);
@@ -291,6 +305,8 @@ function buildCartIndexes(lines) {
       subtotalAmount,
     };
 
+    lineById.set(line.id, indexedLine);
+
     if (variantId) {
       const existingVariantLines = linesByVariantId.get(variantId) ?? [];
       existingVariantLines.push(indexedLine);
@@ -304,19 +320,16 @@ function buildCartIndexes(lines) {
     }
   }
 
-  return { linesByVariantId, linesByProductId };
+  return { linesByVariantId, linesByProductId, lineById };
 }
 
-function resolveTier(bundleSets, tiers) {
-  let matchedTier = null;
-
-  for (const tier of tiers) {
-    if (bundleSets >= tier.minimumQuantity) {
-      matchedTier = tier;
-    }
-  }
-
-  return matchedTier;
+// Returns the highest applicable tier for the given quantity.
+// Tiers are pre-sorted ascending by minimumQuantity; filter to qualifying ones
+// and return the last (highest). Matches Feature 4 spec pattern:
+//   .filter(t => quantity >= t.minimumQuantity).sort((a,b) => b.min - a.min)[0]
+function resolveTier(quantity, tiers) {
+  const qualifying = tiers.filter((t) => quantity >= t.minimumQuantity);
+  return qualifying.length > 0 ? qualifying[qualifying.length - 1] : null;
 }
 
 function buildDiscountValue(tier, appliedSets) {
@@ -328,11 +341,17 @@ function buildDiscountValue(tier, appliedSets) {
     };
   }
 
-  return {
-    fixedAmount: {
-      amount: tier.discountValue * appliedSets,
-    },
-  };
+  if (tier.discountType === "fixed_amount") {
+    return {
+      fixedAmount: {
+        amount: tier.discountValue * appliedSets,
+      },
+    };
+  }
+
+  // bogo is handled before this function is called; this branch is unreachable
+  // but guards against any future tier type falling through
+  return null;
 }
 
 function estimateDiscountAmount(tier, appliedSets, targetedSubtotal) {
@@ -344,12 +363,53 @@ function estimateDiscountAmount(tier, appliedSets, targetedSubtotal) {
     return targetedSubtotal * (tier.discountValue / 100);
   }
 
-  return tier.discountValue * appliedSets;
+  if (tier.discountType === "fixed_amount") {
+    return tier.discountValue * appliedSets;
+  }
+
+  return 0;
+}
+
+// BOGO: apply 100% discount to the cheapest eligible line (1 unit) only.
+function applyBogo(title, validation, indexes) {
+  let cheapestLineId = null;
+  let cheapestUnitPrice = Infinity;
+
+  for (const target of validation.targets) {
+    const lineId = target.cartLine.id;
+    const line = indexes.lineById.get(lineId);
+    if (!line || line.quantity <= 0) {
+      continue;
+    }
+
+    const unitPrice = line.subtotalAmount / line.quantity;
+    if (unitPrice < cheapestUnitPrice) {
+      cheapestUnitPrice = unitPrice;
+      cheapestLineId = lineId;
+    }
+  }
+
+  if (!cheapestLineId || !(cheapestUnitPrice > 0)) {
+    return null;
+  }
+
+  return {
+    candidate: {
+      message: `${title} - Free Item Applied`,
+      targets: [{ cartLine: { id: cheapestLineId, quantity: 1 } }],
+      value: { percentage: { value: 100 } },
+    },
+    consumedLineQuantities: validation.consumedLineQuantities,
+  };
 }
 
 function buildTierMessage(bundleTitle, tier) {
   if (tier.discountType === "percentage") {
     return `${bundleTitle} - ${tier.discountValue}% Off Applied`;
+  }
+
+  if (tier.discountType === "fixed_amount") {
+    return `${bundleTitle} - $${tier.discountValue} Off Applied`;
   }
 
   return `${bundleTitle} - Bundle Savings Applied`;
@@ -452,9 +512,17 @@ class Validator {
       return null;
     }
 
+    // resolveTier uses appliedSets as the quantity dimension:
+    // - For single-product volume bundles (qty=1/set): appliedSets == line.quantity
+    // - For multi-product bundles: appliedSets == number of complete bundle sets
+    // Both cases use the same "find highest applicable tier" logic (Feature 4 spec).
     const tier = resolveTier(validation.appliedSets, bundle.tiers);
     if (!tier) {
       return null;
+    }
+
+    if (tier.discountType === "bogo") {
+      return applyBogo(bundle.title, validation, this.indexes);
     }
 
     const estimatedDiscountAmount = estimateDiscountAmount(
@@ -468,11 +536,16 @@ class Validator {
       return null;
     }
 
+    const discountValue = buildDiscountValue(tier, validation.appliedSets);
+    if (!discountValue) {
+      return null;
+    }
+
     return {
       candidate: {
         message: buildTierMessage(bundle.title, tier),
         targets: validation.targets,
-        value: buildDiscountValue(tier, validation.appliedSets),
+        value: discountValue,
       },
       consumedLineQuantities: validation.consumedLineQuantities,
     };

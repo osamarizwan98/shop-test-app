@@ -45,7 +45,8 @@ model Bundle {
   inventoryHidden Boolean    @default(false)
   discountType  DiscountType
   discountValue Float
-  productIds    Json
+  productIds        Json
+  shopifyDiscountId String?
   totalSales    Float        @default(0)
   totalRevenue  Float        @default(0)
   createdAt     DateTime     @default(now())
@@ -138,4 +139,44 @@ model OnboardingState {
   updatedAt              DateTime @updatedAt
 
   @@index([shop])
+}
+
+model FbtConfig {
+  id          String       @id @default(cuid())
+  shop        String
+  productId   String
+  title       String?
+  isEnabled   Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  products    FbtProduct[]
+
+  @@unique([shop, productId])
+  @@index([shop])
+}
+
+model FbtProduct {
+  id          String    @id @default(cuid())
+  fbtConfigId String
+  productId   String
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  fbtConfig   FbtConfig @relation(fields: [fbtConfigId], references: [id], onDelete: Cascade)
+
+  @@index([fbtConfigId])
+}
+
+model AnalyticsEvent {
+  id             String   @id @default(cuid())
+  shopDomain     String
+  event          String
+  bundleId       String?
+  sessionId      String?
+  orderId        String?
+  revenue        Float?
+  discountAmount Float?
+  metadata       Json?
+  timestamp      DateTime @default(now())
+
+  @@index([shopDomain, event, timestamp])
 }

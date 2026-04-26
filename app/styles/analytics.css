@@ -1,0 +1,247 @@
+/* ── Page ───────────────────────────────────────────────────────────────────── */
+.BS_analytics-page {
+  padding: 1.5rem;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+.BS_analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.BS_analytics-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ── Period tabs ────────────────────────────────────────────────────────────── */
+.BS_period-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.BS_period-tab {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  transition: background 0.12s, color 0.12s;
+}
+
+.BS_period-tab:last-child {
+  border-right: none;
+}
+
+.BS_period-tab:hover {
+  background: var(--background-section);
+  color: var(--text-primary);
+}
+
+.BS_period-tab--active,
+.BS_period-tab--active:hover {
+  background: var(--primary);
+  color: var(--text-inverted, #fff);
+}
+
+/* ── KPI grid ───────────────────────────────────────────────────────────────── */
+.BS_kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .BS_kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .BS_kpi-grid { grid-template-columns: 1fr; }
+}
+
+.BS_kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.BS_kpi-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem;
+}
+
+.BS_kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin: 0 0 0.375rem;
+}
+
+.BS_kpi-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── Chart card ─────────────────────────────────────────────────────────────── */
+.BS_chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.5rem;
+}
+
+.BS_section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem;
+}
+
+.BS_chart-empty {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 3rem 0;
+  margin: 0;
+}
+
+/* ── Bottom two-column row ──────────────────────────────────────────────────── */
+.BS_bottom-row {
+  display: grid;
+  grid-template-columns: 60% 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .BS_bottom-row { grid-template-columns: 1fr; }
+}
+
+.BS_panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Leaderboard table ──────────────────────────────────────────────────────── */
+.BS_leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.BS_leaderboard-table thead tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.BS_leaderboard-table th {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.BS_leaderboard-table td {
+  padding: 0.625rem 0.75rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--divider, #F3F4F6);
+}
+
+.BS_leaderboard-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.BS_leaderboard-row--top td {
+  background: var(--primary-light, #D1FAE5);
+}
+
+.BS_leaderboard-rank {
+  font-weight: 700;
+  color: var(--primary-dark, #047857) !important;
+}
+
+/* ── AOV note ───────────────────────────────────────────────────────────────── */
+.BS_aov-note {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin: 0.75rem 0 0;
+  text-align: center;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────────── */
+.BS_empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 5rem 1.5rem;
+}
+
+.BS_empty-icon {
+  font-size: 2rem;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light, #D1FAE5);
+}
+
+.BS_empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.BS_empty-sub {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  max-width: 28rem;
+  margin: 0;
+}
+
+.BS_empty-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--text-inverted, #fff);
+  text-decoration: none;
+  margin-top: 0.25rem;
+}
+
+.BS_empty-cta:hover {
+  background: var(--primary-hover, #059669);
+}

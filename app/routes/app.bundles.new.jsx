@@ -65,7 +65,6 @@ export default function NewBundle() {
           Create Bundle
         </p>
       </div>
-
       <BundleForm intent="create" />
     </div>
   );

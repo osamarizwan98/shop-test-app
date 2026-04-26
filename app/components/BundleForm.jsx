@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useFetcher, useNavigate, Link } from 'react-router';
+import { useFetcher, useNavigate } from 'react-router';
 
 const DISPLAY_LOCATIONS = [
   { key: 'product_page', label: 'Product Page' },
@@ -7,50 +7,75 @@ const DISPLAY_LOCATIONS = [
   { key: 'cart_drawer', label: 'Cart Drawer' },
 ];
 
-// JSON string for s-select options attribute
-const DISCOUNT_TYPE_OPTIONS = JSON.stringify([
-  { label: 'Percentage', value: 'percentage' },
-  { label: 'Fixed Amount', value: 'fixed_amount' },
-  { label: 'BOGO (Buy One Get One)', value: 'bogo' },
-]);
+const DISCOUNT_TABS = [
+  { value: 'percentage', label: 'Percentage' },
+  { value: 'fixed_amount', label: 'Fixed Amount' },
+  { value: 'bogo', label: 'BOGO' },
+];
 
-function discountPreview(type, value) {
-  if (type === 'bogo') return 'Customer gets the cheapest item free';
-  const v = parseFloat(value);
-  if (!value || isNaN(v) || v <= 0) return null;
-  if (type === 'percentage') return `Customer saves ${v}% off bundle`;
-  if (type === 'fixed_amount') return `Customer saves $${v.toFixed(2)} off bundle`;
-  return null;
-}
-
-// Normalize a Shopify GID to a plain numeric ID string used in productIds JSON
 function gidToId(gid) {
   return gid?.split('/').pop() ?? gid;
 }
 
-function ProductCard({ product, quantity, onQtyChange, onRemove }) {
-  // price is stored as a plain string on selectedProducts objects
-  const price = product.price ?? product.variants?.nodes?.[0]?.price ?? '0.00';
-  const imgUrl = product.featuredImage?.url;
+function computeDiscount(type, value, products) {
+  const total = products.reduce((s, p) => s + Number(p.price || 0) * (p.quantity || 1), 0);
+  if (type === 'bogo' && products.length > 0) {
+    const cheapest = Math.min(...products.map((p) => Number(p.price || 0)));
+    const discounted = Math.max(0, total - cheapest);
+    const pct = total > 0 ? (cheapest / total) * 100 : 0;
+    return { total, discounted, pct, savings: cheapest };
+  }
+  const v = parseFloat(value);
+  if (!value || isNaN(v) || v <= 0) return { total, discounted: total, pct: 0, savings: 0 };
+  if (type === 'percentage') {
+    const savings = total * (v / 100);
+    return { total, discounted: total - savings, pct: v, savings };
+  }
+  if (type === 'fixed_amount') {
+    const discounted = Math.max(0, total - v);
+    return { total, discounted, pct: total > 0 ? (v / total) * 100 : 0, savings: v };
+  }
+  return { total, discounted: total, pct: 0, savings: 0 };
+}
+
+// ── Product row ──────────────────────────────────────────────────────────────
+
+function ProductRow({ product, quantity, onQtyChange, onRemove }) {
+  const price = product.price ?? '0.00';
+  const imgUrl = product.imageUrl ?? product.featuredImage?.url;
   return (
     <div
-      className="BS_product-card flex items-center gap-3 p-3 rounded-lg"
+      className="BS_product-row flex items-center gap-3 p-3 rounded-lg"
       style={{ border: '1px solid var(--border)', background: 'var(--card)' }}
     >
+      {/* Drag handle — visual only */}
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="currentColor"
+        className="shrink-0 cursor-grab"
+        style={{ color: 'var(--border)' }}
+      >
+        <circle cx="4" cy="3" r="1.2" />
+        <circle cx="10" cy="3" r="1.2" />
+        <circle cx="4" cy="7" r="1.2" />
+        <circle cx="10" cy="7" r="1.2" />
+        <circle cx="4" cy="11" r="1.2" />
+        <circle cx="10" cy="11" r="1.2" />
+      </svg>
+
       {imgUrl ? (
-        <img
-          src={imgUrl}
-          alt={product.title}
-          className="w-12 h-12 rounded object-cover shrink-0"
-        />
+        <img src={imgUrl} alt={product.title} className="w-12 h-12 rounded-lg object-cover shrink-0" />
       ) : (
         <div
-          className="w-12 h-12 rounded shrink-0 flex items-center justify-center text-lg"
+          className="w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-lg"
           style={{ background: 'var(--background-section, #F3F4F6)' }}
         >
           📦
         </div>
       )}
+
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
           {product.title}
@@ -59,165 +84,284 @@ function ProductCard({ product, quantity, onQtyChange, onRemove }) {
           ${Number(price).toFixed(2)}
         </p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Qty</label>
-        <input
-          type="number"
-          min="1"
-          value={quantity}
-          onChange={(e) => onQtyChange(Math.max(1, parseInt(e.target.value, 10) || 1))}
-          className="w-14 text-center text-sm rounded px-2 py-1"
-          style={{
-            border: '1px solid var(--border)',
-            background: 'var(--card)',
-            color: 'var(--text-primary)',
-          }}
-        />
+
+      {/* Qty stepper */}
+      <div className="flex items-center shrink-0" style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
         <button
           type="button"
-          onClick={onRemove}
-          className="text-xs px-2 py-1 rounded"
-          style={{
-            background: 'var(--error-light, #FEE2E2)',
-            color: 'var(--error, #EF4444)',
-            border: 'none',
-            cursor: 'pointer',
-          }}
+          onClick={() => onQtyChange(Math.max(1, quantity - 1))}
+          className="w-7 h-7 flex items-center justify-center text-base font-bold transition-colors"
+          style={{ background: 'var(--card)', color: 'var(--text-primary)', border: 'none', cursor: 'pointer' }}
         >
-          ✕
+          −
+        </button>
+        <span
+          className="w-8 h-7 flex items-center justify-center text-sm"
+          style={{ borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)', color: 'var(--text-primary)' }}
+        >
+          {quantity}
+        </span>
+        <button
+          type="button"
+          onClick={() => onQtyChange(quantity + 1)}
+          className="w-7 h-7 flex items-center justify-center text-base font-bold transition-colors"
+          style={{ background: 'var(--card)', color: 'var(--text-primary)', border: 'none', cursor: 'pointer' }}
+        >
+          +
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="w-7 h-7 rounded flex items-center justify-center text-xs shrink-0"
+        style={{ background: 'var(--error-light, #FEE2E2)', color: 'var(--error, #EF4444)', border: 'none', cursor: 'pointer' }}
+      >
+        ✕
+      </button>
     </div>
   );
 }
 
-function ProductSearch({ selectedIds, onAdd }) {
-  const searchFetcher = useFetcher();
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef(null);
+// ── BOGO preview visual ──────────────────────────────────────────────────────
 
-  const results = searchFetcher.data?.products ?? [];
-  const isSearching = searchFetcher.state !== 'idle';
-
-  function handleInput(value) {
-    setQuery(value);
-    setOpen(true);
-    if (value.trim()) {
-      searchFetcher.load(`/api/products/search?q=${encodeURIComponent(value.trim())}`);
-    }
+function BogoPreview({ products }) {
+  if (products.length < 2) {
+    return (
+      <div
+        className="rounded-lg flex items-center justify-center py-5"
+        style={{ background: 'var(--background-section, #F3F4F6)', border: '2px dashed var(--border)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+          Add at least 2 products above to preview BOGO
+        </p>
+      </div>
+    );
   }
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClick(e) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  const sorted = [...products].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+  const cheapest = sorted[0];
+  const paid = sorted[sorted.length - 1];
+  const extraCount = products.length - 2;
 
-  const visibleResults = results.filter((p) => !selectedIds.includes(gidToId(p.id)));
+  function ProductThumb({ product, isFree }) {
+    const img = product.imageUrl ?? product.featuredImage?.url;
+    return (
+      <div className="BS_bogo-thumb flex flex-col items-center gap-1.5">
+        <div className="relative">
+          {img ? (
+            <img
+              src={img}
+              alt={product.title}
+              className="w-16 h-16 rounded-lg object-cover"
+              style={{ border: `2px solid ${isFree ? 'var(--primary)' : 'var(--border)'}` }}
+            />
+          ) : (
+            <div
+              className="w-16 h-16 rounded-lg flex items-center justify-center text-xl"
+              style={{ background: 'var(--background-section, #F3F4F6)', border: `2px solid ${isFree ? 'var(--primary)' : 'var(--border)'}` }}
+            >
+              📦
+            </div>
+          )}
+          {isFree && (
+            <span
+              className="absolute -top-2 -right-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: 'var(--primary)', color: '#fff', lineHeight: '1.2' }}
+            >
+              FREE
+            </span>
+          )}
+        </div>
+        <div className="text-center max-w-18">
+          <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+            {product.title}
+          </p>
+          {isFree ? (
+            <p className="text-xs line-through" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+              ${Number(product.price || 0).toFixed(2)}
+            </p>
+          ) : (
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              ${Number(product.price || 0).toFixed(2)}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div ref={wrapperRef} className="relative">
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Search products
-        </label>
-        <input
-          type="text"
-          value={query}
-          placeholder="Type product name..."
-          onChange={(e) => handleInput(e.target.value)}
-          onFocus={() => query.trim() && setOpen(true)}
-          className="w-full px-3 py-2 rounded-md text-sm"
-          style={{
-            border: '1px solid var(--border)',
-            background: 'var(--card)',
-            color: 'var(--text-primary)',
-            outline: 'none',
-          }}
-        />
-      </div>
+    <div className="flex items-center gap-3 flex-wrap">
+      <ProductThumb product={paid} isFree={false} />
+      {extraCount > 0 && (
+        <span className="text-xs font-medium" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+          +{extraCount} more
+        </span>
+      )}
+      <span className="text-lg font-bold" style={{ color: 'var(--text-muted, #9CA3AF)' }}>+</span>
+      <ProductThumb product={cheapest} isFree={true} />
+    </div>
+  );
+}
 
-      {open && (query.trim()) && (
-        <div
-          className="BS_search-dropdown absolute z-50 w-full mt-1 rounded-lg overflow-hidden"
+// ── Live preview card ────────────────────────────────────────────────────────
+
+function PreviewCard({ title, selectedProducts, discountType, discountValue, active }) {
+  const { total, discounted, pct, savings } = computeDiscount(discountType, discountValue, selectedProducts);
+  const hasDiscount = savings > 0;
+  const previewImages = selectedProducts.slice(0, 3);
+
+  return (
+    <div
+      className="BS_preview-card rounded-xl overflow-hidden"
+      style={{ border: '1px solid var(--border)', background: 'var(--card)', position: 'sticky', top: '24px' }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3"
+        style={{ borderBottom: '1px solid var(--border)', background: 'var(--background-section, #F3F4F6)' }}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+          Live Preview
+        </p>
+        <span
+          className="text-xs px-2 py-0.5 rounded-full font-medium"
           style={{
-            border: '1px solid var(--border)',
-            background: 'var(--card)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            maxHeight: '260px',
-            overflowY: 'auto',
+            background: active ? 'var(--primary-light, #D1FAE5)' : 'var(--background-section, #F3F4F6)',
+            color: active ? 'var(--primary-dark, #047857)' : 'var(--text-muted, #9CA3AF)',
+            border: '1px solid',
+            borderColor: active ? 'transparent' : 'var(--border)',
           }}
         >
-          {isSearching && (
-            <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Searching…
-            </div>
-          )}
-          {!isSearching && visibleResults.length === 0 && (
-            <div className="px-4 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              No products found
-            </div>
-          )}
-          {visibleResults.map((product) => {
-            const price = product.variants?.nodes?.[0]?.price ?? '0.00';
-            const imgUrl = product.featuredImage?.url;
-            return (
-              <button
-                key={product.id}
-                type="button"
-                className="BS_search-result w-full flex items-center gap-3 px-4 py-2 text-left transition-colors"
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--background-section, #F3F4F6)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                onClick={() => {
-                  onAdd(product);
-                  setQuery('');
-                  setOpen(false);
-                }}
-              >
-                {imgUrl ? (
-                  <img src={imgUrl} alt={product.title} className="w-8 h-8 rounded object-cover shrink-0" />
+          {active ? 'Active' : 'Draft'}
+        </span>
+      </div>
+
+      <div className="p-5 flex flex-col gap-4">
+        {/* Product images */}
+        {selectedProducts.length === 0 ? (
+          <div
+            className="rounded-lg flex flex-col items-center justify-center py-8 gap-2"
+            style={{ background: 'var(--background-section, #F3F4F6)', border: '2px dashed var(--border)' }}
+          >
+            <span className="text-2xl">📦</span>
+            <p className="text-xs" style={{ color: 'var(--text-muted, #9CA3AF)' }}>No products selected</p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {previewImages.map((p, i) => (
+              <div key={p.id} className="flex items-center gap-2">
+                {(p.imageUrl ?? p.featuredImage?.url) ? (
+                  <img
+                    src={p.imageUrl ?? p.featuredImage?.url}
+                    alt={p.title}
+                    className="w-14 h-14 rounded-lg object-cover"
+                    style={{ border: '1px solid var(--border)' }}
+                  />
                 ) : (
                   <div
-                    className="w-8 h-8 rounded shrink-0 flex items-center justify-center text-sm"
-                    style={{ background: 'var(--background-section, #F3F4F6)' }}
+                    className="w-14 h-14 rounded-lg flex items-center justify-center text-xl"
+                    style={{ background: 'var(--background-section, #F3F4F6)', border: '1px solid var(--border)' }}
                   >
                     📦
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                    {product.title}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    ${Number(price).toFixed(2)}
-                  </p>
-                </div>
-                <span className="text-xs font-medium shrink-0" style={{ color: 'var(--primary)' }}>
-                  + Add
+                {i < previewImages.length - 1 && (
+                  <span className="font-bold" style={{ color: 'var(--text-muted, #9CA3AF)' }}>+</span>
+                )}
+              </div>
+            ))}
+            {selectedProducts.length > 3 && (
+              <span className="text-xs px-2 py-1 rounded-full" style={{ background: 'var(--background-section, #F3F4F6)', color: 'var(--text-secondary)' }}>
+                +{selectedProducts.length - 3} more
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Bundle name */}
+        <p className="font-semibold text-base leading-tight" style={{ color: title ? 'var(--text-primary)' : 'var(--text-muted, #9CA3AF)' }}>
+          {title || 'Your Bundle Name'}
+        </p>
+
+        {/* Pricing */}
+        {selectedProducts.length > 0 && (
+          discountType === 'bogo' ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                  ${discounted.toFixed(2)}
                 </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                <span className="text-sm line-through" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+                  ${total.toFixed(2)}
+                </span>
+              </div>
+              <span
+                className="self-start text-xs font-semibold px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--primary-light, #D1FAE5)', color: 'var(--primary-dark, #047857)' }}
+              >
+                BOGO — 1 Item FREE
+              </span>
+              {(() => {
+                const cheapest = [...selectedProducts].sort(
+                  (a, b) => Number(a.price || 0) - Number(b.price || 0),
+                )[0];
+                return (
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {cheapest.title} (${Number(cheapest.price || 0).toFixed(2)}) is FREE
+                  </p>
+                );
+              })()}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap">
+              {hasDiscount && (
+                <span className="text-sm line-through" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+                  ${total.toFixed(2)}
+                </span>
+              )}
+              <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                ${discounted.toFixed(2)}
+              </span>
+              {pct > 0 && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: 'var(--primary-light, #D1FAE5)', color: 'var(--primary-dark, #047857)' }}
+                >
+                  Save {Math.round(pct)}%
+                </span>
+              )}
+            </div>
+          )
+        )}
+
+        {/* Fake CTA */}
+        <button
+          type="button"
+          disabled
+          className="w-full py-2.5 rounded-lg text-sm font-semibold"
+          style={{ background: 'var(--primary)', color: '#fff', cursor: 'default', opacity: 0.9 }}
+        >
+          Add Bundle to Cart
+        </button>
+
+        <p className="text-xs text-center" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+          Preview only — updates as you edit
+        </p>
+      </div>
     </div>
   );
 }
+
+// ── Main form ────────────────────────────────────────────────────────────────
 
 export default function BundleForm({ bundle = null, intent }) {
   const fetcher = useFetcher();
   const navigate = useNavigate();
 
-  // Local state — uncontrolled web components read from here on submit
   const [title, setTitle] = useState(bundle?.title ?? '');
-  const [description, setDescription] = useState(''); // not in schema yet
+  const [description, setDescription] = useState('');
   const [discountType, setDiscountType] = useState(bundle?.discountType ?? 'percentage');
   const [discountValue, setDiscountValue] = useState(
     bundle?.discountValue != null ? String(bundle.discountValue) : '',
@@ -228,35 +372,130 @@ export default function BundleForm({ bundle = null, intent }) {
     cart: false,
     cart_drawer: false,
   });
-  // selectedProducts: array of { id (plain), gid, title, price, featuredImage, quantity }
   const [selectedProducts, setSelectedProducts] = useState(() => {
     if (!bundle?.productIds) return [];
     const ids = Array.isArray(bundle.productIds) ? bundle.productIds : [];
-    // productIds may be plain ID strings or objects; normalise to objects
     return ids.map((item) =>
       typeof item === 'object' && item !== null
         ? { quantity: 1, ...item }
-        : { id: item, gid: null, title: item, price: '0.00', featuredImage: null, quantity: 1 },
+        : { id: item, gid: null, title: item, price: '0.00', imageUrl: null, quantity: 1 },
     );
   });
   const [errors, setErrors] = useState({});
 
+  // Snapshot of values at mount — used to compute isDirty
+  const initialRef = useRef({
+    title: bundle?.title ?? '',
+    discountType: bundle?.discountType ?? 'percentage',
+    discountValue: bundle?.discountValue != null ? String(bundle.discountValue) : '',
+    active: bundle ? bundle.status === 'active' : true,
+    selectedProducts: (() => {
+      if (!bundle?.productIds) return [];
+      const ids = Array.isArray(bundle.productIds) ? bundle.productIds : [];
+      return ids.map((item) =>
+        typeof item === 'object' && item !== null
+          ? { quantity: 1, ...item }
+          : { id: item, gid: null, title: item, price: '0.00', imageUrl: null, quantity: 1 },
+      );
+    })(),
+  });
+
+  function productsKey(products) {
+    return JSON.stringify(
+      [...products]
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+        .map((p) => ({ id: p.id, quantity: p.quantity })),
+    );
+  }
+
+  const isDirty =
+    title !== initialRef.current.title ||
+    discountType !== initialRef.current.discountType ||
+    discountValue !== initialRef.current.discountValue ||
+    active !== initialRef.current.active ||
+    productsKey(selectedProducts) !== productsKey(initialRef.current.selectedProducts);
+
   const isSubmitting = fetcher.state !== 'idle';
 
-  // Navigate to list after successful save
+  // Show/hide save bar based on dirty state
+  useEffect(() => {
+    if (isDirty) {
+      shopify.saveBar.show('bundle-save-bar');
+    } else {
+      shopify.saveBar.hide('bundle-save-bar');
+    }
+  }, [isDirty]);
+
+  // Hide save bar and navigate on successful save
   useEffect(() => {
     if (fetcher.data?.success) {
+      shopify.saveBar.hide('bundle-save-bar');
       navigate('/app/bundles');
     }
   }, [fetcher.data, navigate]);
+
+  // Hide save bar on unmount (e.g. browser back)
+  useEffect(() => {
+    return () => shopify.saveBar.hide('bundle-save-bar');
+  }, []);
+
+  // ── Resource Picker ──────────────────────────────────────────────────────
+
+  async function handleSelectProducts() {
+    const selected = await shopify.resourcePicker({
+      type: 'product',
+      multiple: true,
+      action: 'add',
+      filter: { archived: false, draft: false, variants: true },
+      selectionIds: selectedProducts.map((p) => ({
+        id: p.gid ?? `gid://shopify/Product/${p.id}`,
+        variants: (p.variants ?? []).map((v) => ({ id: v.id })),
+      })),
+    });
+
+    if (selected) {
+      const mapped = selected.map((p) => ({
+        id: gidToId(p.id),
+        gid: p.id,
+        title: p.title,
+        imageUrl: p.images[0]?.originalSrc ?? null,
+        variantId: p.variants[0]?.id,
+        price: p.variants[0]?.price ?? '0',
+        quantity: 1,
+      }));
+      setSelectedProducts(mapped);
+      setErrors((prev) => ({ ...prev, products: '' }));
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  function removeProduct(id) {
+    setSelectedProducts((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function updateQty(id, qty) {
+    setSelectedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, quantity: qty } : p)));
+  }
 
   function toggleLocation(key) {
     setDisplayLocations((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  function handleDiscard() {
+    const init = initialRef.current;
+    setTitle(init.title);
+    setDiscountType(init.discountType);
+    setDiscountValue(init.discountValue);
+    setActive(init.active);
+    setSelectedProducts(init.selectedProducts);
+    setErrors({});
+  }
+
   function validate() {
     const errs = {};
     if (!title.trim()) errs.title = 'Bundle name is required';
+    if (selectedProducts.length < 2) errs.products = 'Select at least 2 products';
     if (discountType !== 'bogo') {
       const v = parseFloat(discountValue);
       if (!discountValue || isNaN(v) || v <= 0) {
@@ -269,287 +508,344 @@ export default function BundleForm({ bundle = null, intent }) {
     return Object.keys(errs).length === 0;
   }
 
-  function addProduct(product) {
-    const id = gidToId(product.id);
-    setSelectedProducts((prev) => {
-      if (prev.some((p) => p.id === id)) return prev;
-      const price = product.variants?.nodes?.[0]?.price ?? '0.00';
-      return [
-        ...prev,
-        { id, gid: product.id, title: product.title, price, featuredImage: product.featuredImage, quantity: 1 },
-      ];
-    });
-  }
-
-  function removeProduct(id) {
-    setSelectedProducts((prev) => prev.filter((p) => p.id !== id));
-  }
-
-  function updateQty(id, qty) {
-    setSelectedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, quantity: qty } : p)));
-  }
-
-  function handleSubmit() {
+  function submit(status) {
     if (!validate()) return;
-
     const data = new FormData();
     data.set('intent', intent);
     data.set('title', title.trim());
-    // Map BOGO → percentage/100 until schema enum is extended
     data.set('discountType', discountType === 'bogo' ? 'percentage' : discountType);
     data.set('discountValue', discountType === 'bogo' ? '100' : discountValue);
-    data.set('status', active ? 'active' : 'inactive');
-    data.set('productIds', JSON.stringify(selectedProducts.map(({ id, gid, title, price, featuredImage, quantity }) => ({ id, gid, title, price, featuredImage, quantity }))));
+    data.set('status', status);
+    data.set(
+      'productIds',
+      JSON.stringify(
+        selectedProducts.map(({ id, gid, title: t, price, imageUrl, variantId, quantity }) => ({
+          id, gid, title: t, price, imageUrl, variantId, quantity,
+        })),
+      ),
+    );
     if (intent === 'update' && bundle?.id) data.set('id', bundle.id);
-
     fetcher.submit(data, { method: 'post' });
   }
 
   const serverError = fetcher.data?.error;
-  const preview = discountPreview(discountType, discountValue);
+  const { savings } = computeDiscount(discountType, discountValue, selectedProducts);
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex flex-col gap-6">
 
-      {/* Server-side error */}
+      <ui-save-bar id="bundle-save-bar">
+        <button variant="primary" id="save-activate-btn" onClick={() => submit('active')}>
+          Save &amp; Activate
+        </button>
+        <button id="discard-btn" onClick={handleDiscard}>
+          Discard changes
+        </button>
+      </ui-save-bar>
+
+      {/* Server error banner */}
       {serverError && (
         <div
           className="flex items-start gap-3 px-4 py-3 rounded-md"
-          style={{
-            background: 'var(--error-light, #FEE2E2)',
-            border: '1px solid var(--error, #EF4444)',
-          }}
+          style={{ background: 'var(--error-light, #FEE2E2)', border: '1px solid var(--error, #EF4444)' }}
         >
           <span style={{ color: 'var(--error, #EF4444)', flexShrink: 0 }}>⚠</span>
           <p className="text-sm" style={{ color: 'var(--error, #EF4444)' }}>{serverError}</p>
         </div>
       )}
 
-      {/* ── Section 1: Bundle Details ── */}
-      <s-section>
-        <div className="p-5">
-          <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-            Bundle Details
-          </p>
-          <div className="flex flex-col gap-4">
+      {/* Two-column layout */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-            {/* Name */}
-            <div>
-              <s-text-field
-                label="Bundle Name"
-                defaultValue={title}
-                placeholder="e.g., Summer Collection Bundle"
-                onInput={(e) => {
-                  setTitle(e.target.value);
-                  setErrors((p) => ({ ...p, title: '' }));
-                }}
-              />
-              {errors.title && (
-                <p className="text-xs mt-1" style={{ color: 'var(--error, #EF4444)' }}>
-                  {errors.title}
-                </p>
-              )}
-            </div>
+        {/* ── LEFT COLUMN (60%) ──────────────────────────────────────────── */}
+        <div className="flex flex-col gap-5 w-full lg:w-[60%]">
 
-            {/* Description — UI only, not persisted until schema updated */}
-            <s-text-area
-              label="Description (optional)"
-              defaultValue={description}
-              placeholder="Describe what makes this bundle special..."
-              onInput={(e) => setDescription(e.target.value)}
-            />
-          </div>
-        </div>
-      </s-section>
-
-      {/* ── Section 2: Products ── */}
-      <s-section>
-        <div className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Products
-            </p>
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              {selectedProducts.length} selected
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <ProductSearch
-              selectedIds={selectedProducts.map((p) => p.id)}
-              onAdd={addProduct}
-            />
-
-            {selectedProducts.length > 0 ? (
-              <div className="flex flex-col gap-2 mt-1">
-                {selectedProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    quantity={product.quantity}
-                    onQtyChange={(qty) => updateQty(product.id, qty)}
-                    onRemove={() => removeProduct(product.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div
-                className="rounded-lg border-2 border-dashed flex flex-col items-center justify-center py-8 gap-1"
-                style={{ borderColor: 'var(--border)', background: 'var(--background-section, #F3F4F6)' }}
-              >
-                <span className="text-2xl">📦</span>
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  No products added yet
-                </p>
-                <p className="text-xs" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
-                  Search above to add products to this bundle
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </s-section>
-
-      {/* ── Section 3: Discount ── */}
-      <s-section>
-        <div className="p-5">
-          <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-            Discount
-          </p>
-          <div className="flex flex-col gap-4">
-
-            <s-select
-              label="Discount Type"
-              options={DISCOUNT_TYPE_OPTIONS}
-              value={discountType}
-              onChange={(e) => {
-                setDiscountType(e.target.value);
-                setErrors((p) => ({ ...p, discountValue: '' }));
-              }}
-            />
-
-            {discountType !== 'bogo' && (
+          {/* Section 1 — Bundle Details */}
+          <s-section>
+            <div className="p-5 flex flex-col gap-4">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Bundle Details
+              </p>
               <div>
-                <s-number-field
-                  label={discountType === 'percentage' ? 'Percentage (%)' : 'Amount ($)'}
-                  defaultValue={discountValue}
-                  min="0"
-                  step={discountType === 'percentage' ? '1' : '0.01'}
-                  placeholder={discountType === 'percentage' ? 'e.g., 15' : 'e.g., 10.00'}
+                <s-text-field
+                  label="Bundle Name"
+                  defaultValue={title}
+                  placeholder="e.g., Summer Collection Bundle"
                   onInput={(e) => {
-                    setDiscountValue(e.target.value);
-                    setErrors((p) => ({ ...p, discountValue: '' }));
+                    setTitle(e.target.value);
+                    setErrors((prev) => ({ ...prev, title: '' }));
                   }}
                 />
-                {errors.discountValue && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--error, #EF4444)' }}>
-                    {errors.discountValue}
-                  </p>
+                {errors.title && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--error, #EF4444)' }}>{errors.title}</p>
                 )}
               </div>
-            )}
-
-            {/* Live discount preview */}
-            {(preview || discountType === 'bogo') && (
-              <div
-                className="BS_discount-preview rounded-md px-4 py-3"
-                style={{ background: 'var(--primary-light, #D1FAE5)' }}
-              >
-                <p className="text-sm font-medium" style={{ color: 'var(--primary-dark, #047857)' }}>
-                  ✓{' '}
-                  {discountType === 'bogo'
-                    ? 'Customer gets the cheapest item free'
-                    : preview}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </s-section>
-
-      {/* ── Section 4: Display & Status ── */}
-      <s-section>
-        <div className="p-5">
-          <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-            Display &amp; Status
-          </p>
-          <div className="flex flex-col gap-5">
-
-            {/* Show on checkboxes — UI only until displayLocations added to schema */}
-            <div>
-              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-                Show on
-              </p>
-              <div className="flex flex-wrap gap-5">
-                {DISPLAY_LOCATIONS.map(({ key, label }) => (
-                  <label
-                    key={key}
-                    className="BS_checkbox-label flex items-center gap-2 cursor-pointer select-none"
-                  >
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded"
-                      style={{ accentColor: 'var(--primary)' }}
-                      checked={displayLocations[key]}
-                      onChange={() => toggleLocation(key)}
-                    />
-                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                      {label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Active toggle */}
-            <div
-              className="flex items-center gap-3 pt-4"
-              style={{ borderTop: '1px solid var(--divider, #F3F4F6)' }}
-            >
-              <s-switch
-                checked={active || undefined}
-                onChange={(e) => setActive(e.target.checked)}
+              <s-text-area
+                label="Description (optional)"
+                defaultValue={description}
+                placeholder="Describe what makes this bundle special..."
+                rows="3"
+                onInput={(e) => setDescription(e.target.value)}
               />
-              <div>
+            </div>
+          </s-section>
+
+          {/* Section 2 — Products */}
+          <s-section>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Products</p>
+                {selectedProducts.length > 0 && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: 'var(--primary-light, #D1FAE5)', color: 'var(--primary-dark, #047857)' }}
+                  >
+                    {selectedProducts.length} selected
+                  </span>
+                )}
+              </div>
+
+              {/* Add Products dashed button */}
+              <button
+                type="button"
+                onClick={handleSelectProducts}
+                className="BS_add-products w-full border-2 border-dashed rounded-lg py-8 flex flex-col items-center gap-2 transition-all"
+                style={{
+                  borderColor: errors.products ? 'var(--error, #EF4444)' : 'var(--border)',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--background-section, #F3F4F6)';
+                  e.currentTarget.style.borderColor = 'var(--primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = errors.products ? 'var(--error, #EF4444)' : 'var(--border)';
+                }}
+              >
+                <span className="text-3xl font-light leading-none" style={{ color: 'var(--primary)' }}>＋</span>
                 <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {active ? 'Active' : 'Inactive'}
+                  {selectedProducts.length > 0 ? 'Change Products' : 'Add Products'}
                 </p>
                 <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {active
-                    ? 'Bundle is live and visible to customers'
-                    : 'Bundle is hidden from customers'}
+                  Select products from your Shopify catalog
                 </p>
+              </button>
+
+              {errors.products && (
+                <p className="text-xs mt-2" style={{ color: 'var(--error, #EF4444)' }}>{errors.products}</p>
+              )}
+
+              {/* Product list */}
+              {selectedProducts.length > 0 && (
+                <div className="flex flex-col gap-2 mt-4">
+                  {selectedProducts.map((product) => (
+                    <ProductRow
+                      key={product.id}
+                      product={product}
+                      quantity={product.quantity}
+                      onQtyChange={(qty) => updateQty(product.id, qty)}
+                      onRemove={() => removeProduct(product.id)}
+                    />
+                  ))}
+                  {selectedProducts.length < 2 && (
+                    <p className="text-xs" style={{ color: 'var(--error, #EF4444)' }}>
+                      A bundle requires at least 2 products
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </s-section>
+
+          {/* Section 3 — Discount */}
+          <s-section>
+            <div className="p-5">
+              <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Discount</p>
+
+              {/* Discount type tabs */}
+              <div
+                className="flex mb-4 rounded-lg overflow-hidden"
+                style={{ border: '1px solid var(--border)' }}
+              >
+                {DISCOUNT_TABS.map((tab, i) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => {
+                      setDiscountType(tab.value);
+                      setErrors((prev) => ({ ...prev, discountValue: '' }));
+                    }}
+                    className="flex-1 py-2 text-sm font-medium transition-colors"
+                    style={{
+                      background: discountType === tab.value ? 'var(--primary)' : 'var(--card)',
+                      color: discountType === tab.value ? '#fff' : 'var(--text-secondary)',
+                      border: 'none',
+                      borderRight: i < DISCOUNT_TABS.length - 1 ? '1px solid var(--border)' : 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Percentage input + slider */}
+              {discountType === 'percentage' && (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <s-number-field
+                      label="Percentage (%)"
+                      value={discountValue}
+                      min="1"
+                      max="50"
+                      step="1"
+                      placeholder="e.g., 15"
+                      onInput={(e) => {
+                        setDiscountValue(e.target.value);
+                        setErrors((prev) => ({ ...prev, discountValue: '' }));
+                      }}
+                    />
+                    {errors.discountValue && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--error, #EF4444)' }}>{errors.discountValue}</p>
+                    )}
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    value={parseFloat(discountValue) || 1}
+                    onChange={(e) => {
+                      setDiscountValue(e.target.value);
+                      setErrors((prev) => ({ ...prev, discountValue: '' }));
+                    }}
+                    className="w-full"
+                    style={{ accentColor: 'var(--primary)' }}
+                  />
+                  <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted, #9CA3AF)' }}>
+                    <span>1%</span><span>25%</span><span>50%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Fixed amount input */}
+              {discountType === 'fixed_amount' && (
+                <div>
+                  <s-number-field
+                    label="Amount ($)"
+                    value={discountValue}
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g., 10.00"
+                    onInput={(e) => {
+                      setDiscountValue(e.target.value);
+                      setErrors((prev) => ({ ...prev, discountValue: '' }));
+                    }}
+                  />
+                  {errors.discountValue && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--error, #EF4444)' }}>{errors.discountValue}</p>
+                  )}
+                </div>
+              )}
+
+              {/* BOGO section */}
+              {discountType === 'bogo' && (
+                <div className="flex flex-col gap-4">
+                  <div
+                    className="rounded-md px-4 py-3"
+                    style={{ background: 'var(--primary-light, #D1FAE5)' }}
+                  >
+                    <p className="text-sm font-medium" style={{ color: 'var(--primary-dark, #047857)' }}>
+                      🎁 The cheapest product in your bundle will be automatically applied as FREE when customer adds all items to cart
+                    </p>
+                  </div>
+                  <BogoPreview products={selectedProducts} />
+                </div>
+              )}
+
+              {/* Live savings banner */}
+              {savings > 0 && discountType !== 'bogo' && (
+                <div
+                  className="mt-4 rounded-md px-4 py-3"
+                  style={{ background: 'var(--primary-light, #D1FAE5)' }}
+                >
+                  <p className="text-sm font-medium" style={{ color: 'var(--primary-dark, #047857)' }}>
+                    ✓ Customer saves ${savings.toFixed(2)} on this bundle
+                  </p>
+                </div>
+              )}
+            </div>
+          </s-section>
+
+          {/* Section 4 — Display & Status */}
+          <s-section>
+            <div className="p-5">
+              <p className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+                Display &amp; Status
+              </p>
+
+              {/* Show on toggle chips */}
+              <div className="mb-5">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-secondary)' }}>
+                  Show on
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {DISPLAY_LOCATIONS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleLocation(key)}
+                      className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
+                      style={{
+                        background: displayLocations[key] ? 'var(--primary)' : 'var(--card)',
+                        color: displayLocations[key] ? '#fff' : 'var(--text-secondary)',
+                        border: `1px solid ${displayLocations[key] ? 'var(--primary)' : 'var(--border)'}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {displayLocations[key] ? '✓ ' : ''}{label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Active toggle */}
+              <div
+                className="flex items-center gap-3 pt-4"
+                style={{ borderTop: '1px solid var(--divider, #F3F4F6)' }}
+              >
+                <s-switch
+                  checked={active || undefined}
+                  onChange={(e) => setActive(e.target.checked)}
+                />
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {active ? 'Active' : 'Inactive'}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {active
+                      ? 'Bundle is live and visible to customers'
+                      : 'Bundle is hidden from customers'}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </s-section>
         </div>
-      </s-section>
 
-      {/* ── Form actions ── */}
-      <div className="flex items-center justify-end gap-3 pb-8">
-        <Link
-          to="/app/bundles"
-          className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium"
-          style={{
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          Cancel
-        </Link>
-        <button
-          type="button"
-          disabled={isSubmitting}
-          onClick={handleSubmit}
-          className="inline-flex items-center px-5 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: 'var(--primary)', color: 'var(--text-inverted, #fff)', cursor: 'pointer' }}
-        >
-          {isSubmitting
-            ? intent === 'create' ? 'Creating...' : 'Saving...'
-            : intent === 'create' ? 'Create Bundle' : 'Save Changes'}
-        </button>
+        {/* ── RIGHT COLUMN (40%) — sticky preview ────────────────────────── */}
+        <div className="w-full lg:w-[40%]">
+          <PreviewCard
+            title={title}
+            selectedProducts={selectedProducts}
+            discountType={discountType}
+            discountValue={discountValue}
+            active={active}
+          />
+        </div>
       </div>
+
     </div>
   );
 }

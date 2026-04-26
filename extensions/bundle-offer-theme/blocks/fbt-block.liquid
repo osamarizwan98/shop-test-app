@@ -35,6 +35,10 @@ endif
 %}
 
 {% if matched_bundle != blank and matched_bundle.products.size >= 2 %}
+<script>
+  window.SB_APP_URL = "{{ app.url }}";
+</script>
+<script src="{{ 'analytics.js' | asset_url }}" defer></script>
 {{ 'sb-styling.css' | asset_url | stylesheet_tag }}
 {% render 'theme-bridge', scope_id: sb_scope_id, ui_style_config: ui_style_config %}
 {% liquid
