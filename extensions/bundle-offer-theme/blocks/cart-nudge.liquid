@@ -1,0 +1,15 @@
+<div id="sb-cart-nudge-root"></div>
+
+<script>
+  window.SB_APP_URL = {{ app.url | json }};
+  window.SB_SHOP    = {{ shop.permanent_domain | json }};
+</script>
+<script src="{{ 'cart-nudge.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "SmartBundle Cart Nudge",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

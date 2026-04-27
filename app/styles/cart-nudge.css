@@ -1,0 +1,374 @@
+/* ── Page ─────────────────────────────────────────────────────────────────── */
+.BS_cn-page {
+  padding: 1.5rem;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+.BS_cn-header {
+  margin-bottom: 1.5rem;
+}
+
+.BS_cn-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem;
+}
+
+.BS_cn-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+.BS_cn-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.BS_cn-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem;
+}
+
+.BS_cn-card-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+/* ── Toggle row ───────────────────────────────────────────────────────────── */
+.BS_cn-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.BS_cn-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.BS_cn-toggle-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.BS_cn-toggle-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── Toggle switch ────────────────────────────────────────────────────────── */
+.BS_cn-toggle {
+  position: relative;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--border-strong, #D1D5DB);
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.BS_cn-toggle--on {
+  background: var(--primary);
+}
+
+.BS_cn-toggle-thumb {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+  display: block;
+}
+
+.BS_cn-toggle--on .BS_cn-toggle-thumb {
+  transform: translateX(1.125rem);
+}
+
+/* ── Settings fields ──────────────────────────────────────────────────────── */
+.BS_cn-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.BS_cn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.BS_cn-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.BS_cn-field-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.125rem;
+}
+
+.BS_cn-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+
+.BS_cn-input:focus {
+  border-color: var(--primary);
+}
+
+/* ── Nudge preview card ───────────────────────────────────────────────────── */
+.BS_cn-preview-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.BS_cn-preview-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem;
+}
+
+.BS_cn-preview-viewport {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+/* Simulated cart nudge widget */
+.BS_cn-widget {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+}
+
+.BS_cn-widget-header {
+  background: var(--primary);
+  padding: 0.625rem 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.BS_cn-widget-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.BS_cn-widget-heading {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  flex: 1;
+}
+
+.BS_cn-widget-body {
+  padding: 0.875rem;
+}
+
+.BS_cn-widget-msg {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.BS_cn-widget-product {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.5rem 0.625rem;
+  margin-bottom: 0.75rem;
+}
+
+.BS_cn-widget-thumb {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 5px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  flex-shrink: 0;
+}
+
+.BS_cn-widget-product-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.BS_cn-widget-product-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.BS_cn-widget-product-sub {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+.BS_cn-widget-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.BS_cn-widget-btn-primary {
+  flex: 1;
+  padding: 0.4375rem 0.75rem;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: default;
+  text-align: center;
+}
+
+.BS_cn-widget-btn-dismiss {
+  padding: 0.4375rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: default;
+}
+
+.BS_cn-preview-caption {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 0.75rem;
+}
+
+/* ── Active bundles list ──────────────────────────────────────────────────── */
+.BS_cn-bundles-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.BS_cn-bundles-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+}
+
+.BS_cn-bundle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.BS_cn-bundle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.BS_cn-bundle-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.BS_cn-bundle-badge {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 0.1875rem 0.5rem;
+  border-radius: 999px;
+  background: #D1FAE5;
+  color: #065F46;
+  flex-shrink: 0;
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────────── */
+.BS_cn-error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: var(--error-light, #FEE2E2);
+  color: var(--error, #DC2626);
+  border: 1px solid var(--error-border, #FECACA);
+  margin-bottom: 1rem;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .BS_cn-widget-actions {
+    flex-direction: column;
+  }
+}

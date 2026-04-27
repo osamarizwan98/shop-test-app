@@ -243,3 +243,15 @@ model AnalyticsEvent {
 
   @@index([shopDomain, event, timestamp])
 }
+
+model CartNudgeConfig {
+  id                  String   @id @default(cuid())
+  shopDomain          String   @unique
+  active              Boolean  @default(true)
+  dismissDuration     Int      @default(24)
+  maxNudgesPerSession Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([shopDomain])
+}
