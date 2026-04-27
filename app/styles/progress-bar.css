@@ -1,0 +1,412 @@
+/* ── Page ─────────────────────────────────────────────────────────────────── */
+.BS_pb-page {
+  padding: 1.5rem;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+.BS_pb-header {
+  margin-bottom: 1.5rem;
+}
+
+.BS_pb-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem;
+}
+
+.BS_pb-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Section cards ────────────────────────────────────────────────────────── */
+.BS_pb-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.BS_pb-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem;
+}
+
+/* ── Toggle rows ──────────────────────────────────────────────────────────── */
+.BS_pb-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.BS_pb-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.BS_pb-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.BS_pb-toggle-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.BS_pb-toggle-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── Toggle switch ────────────────────────────────────────────────────────── */
+.BS_pb-toggle {
+  position: relative;
+  width: 2.5rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--border-strong, #D1D5DB);
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.BS_pb-toggle--on {
+  background: var(--primary);
+}
+
+.BS_pb-toggle-thumb {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+  display: block;
+}
+
+.BS_pb-toggle--on .BS_pb-toggle-thumb {
+  transform: translateX(1.125rem);
+}
+
+/* ── Select field ─────────────────────────────────────────────────────────── */
+.BS_pb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 1rem;
+}
+
+.BS_pb-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.BS_pb-select {
+  width: 100%;
+  max-width: 260px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+
+.BS_pb-select:focus {
+  border-color: var(--primary);
+}
+
+/* ── Milestones section ───────────────────────────────────────────────────── */
+.BS_pb-milestones-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.BS_pb-milestones-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.BS_pb-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.875rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px dashed var(--primary);
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.BS_pb-add-btn:hover:not(:disabled) {
+  background: var(--primary-light, #D1FAE5);
+}
+
+.BS_pb-add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* ── Milestone rows ───────────────────────────────────────────────────────── */
+.BS_pb-milestone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.BS_pb-milestone-row {
+  display: grid;
+  grid-template-columns: 160px 90px 90px 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+  padding: 0.875rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.BS_pb-ms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.BS_pb-ms-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.BS_pb-ms-select {
+  width: 100%;
+  padding: 0.4375rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+
+.BS_pb-ms-select:focus {
+  border-color: var(--primary);
+}
+
+.BS_pb-ms-input {
+  width: 100%;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+
+.BS_pb-ms-input:focus {
+  border-color: var(--primary);
+}
+
+.BS_pb-ms-remove {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 5px;
+  border: 1px solid var(--error-border, #FECACA);
+  background: var(--error-light, #FEE2E2);
+  color: var(--error, #DC2626);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  transition: background 0.1s;
+  align-self: flex-end;
+}
+
+.BS_pb-ms-remove:hover {
+  background: var(--error, #DC2626);
+  color: var(--card);
+}
+
+/* ── Empty milestones ─────────────────────────────────────────────────────── */
+.BS_pb-ms-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+}
+
+/* ── Progress preview strip ───────────────────────────────────────────────── */
+.BS_pb-preview-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.BS_pb-preview-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1.25rem;
+}
+
+.BS_pb-preview-wrap {
+  position: relative;
+  padding-bottom: 2.25rem;
+}
+
+.BS_pb-preview-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  overflow: visible;
+}
+
+.BS_pb-preview-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+  width: 40%;
+  transition: width 0.3s ease;
+}
+
+.BS_pb-preview-fill--pulse {
+  animation: BS_pb-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes BS_pb-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+
+.BS_pb-preview-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.BS_pb-preview-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  background: var(--border-strong, #9CA3AF);
+  box-shadow: 0 0 0 1px var(--border);
+  flex-shrink: 0;
+}
+
+.BS_pb-preview-dot--reached {
+  background: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.BS_pb-preview-marker-label {
+  position: absolute;
+  top: 16px;
+  font-size: 0.625rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.BS_pb-preview-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  padding: 1rem 0;
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────────── */
+.BS_pb-error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: var(--error-light, #FEE2E2);
+  color: var(--error, #DC2626);
+  border: 1px solid var(--error-border, #FECACA);
+  margin-bottom: 1rem;
+}
+
+/* ── Reset button ─────────────────────────────────────────────────────────── */
+.BS_pb-reset-btn {
+  padding: 0.4375rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--error-border, #FECACA);
+  background: var(--error-light, #FEE2E2);
+  color: var(--error, #DC2626);
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-top: 1.5rem;
+}
+
+.BS_pb-reset-btn:hover:not(:disabled) {
+  background: var(--error, #DC2626);
+  color: var(--card);
+}
+
+.BS_pb-reset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .BS_pb-milestone-row {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .BS_pb-ms-remove {
+    grid-column: 2;
+    justify-self: end;
+  }
+}

@@ -5,5 +5,11 @@
     "bundle_item": "Bundle item",
     "missing_variant": "Quick add is unavailable until bundle products include variant data.",
     "add_to_complete": "Add this product to complete the smart bundle"
+  },
+  "fbt": {
+    "title": "Frequently Bought Together",
+    "add_all": "Add All to Cart",
+    "save_label": "Save",
+    "toast_success": "Added to cart"
   }
 }

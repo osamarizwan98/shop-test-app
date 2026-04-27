@@ -1,36 +1,10 @@
 import { useState, useEffect } from 'react';
-import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import prisma from '../db.server';
 import { authenticate } from '../shopify.server';
 import fbtStyles from '../styles/fbt.css?url';
 
 export const links = () => [{ rel: 'stylesheet', href: fbtStyles }];
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-type ShopProduct = {
-  id: string;
-  title: string;
-  featuredImage: { url: string } | null;
-  variants: { nodes: Array<{ id: string; price: string }> };
-};
-
-type FbtProductRow = {
-  id: string;
-  fbtConfigId: string;
-  productId: string;
-  position: number;
-};
-
-type FbtConfigRow = {
-  id: string;
-  productId: string;
-  title: string | null;
-  isEnabled: boolean;
-  products: FbtProductRow[];
-};
-
-type DiscountType = 'none' | 'percentage' | 'fixed';
 
 const FREE_PLAN_MAX = 1;
 
@@ -50,7 +24,7 @@ const PRODUCTS_QUERY = `
 `;
 
 // ── Loader ─────────────────────────────────────────────────────────────────────
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
 
   const [configs, productsRes] = await Promise.all([
@@ -66,12 +40,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return Response.json({
     configs,
-    shopProducts: (gqlData?.products?.nodes ?? []) as ShopProduct[],
+    shopProducts: gqlData?.products?.nodes ?? [],
   });
 }
 
 // ── Action ─────────────────────────────────────────────────────────────────────
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request }) {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = String(formData.get('intent') ?? '');
@@ -91,7 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const title = String(formData.get('title') ?? '').trim() || null;
     const isEnabled = formData.get('isActive') !== 'false';
 
-    let products: Array<{ productId: string; position: number }> = [];
+    let products = [];
     try {
       products = JSON.parse(String(formData.get('products') ?? '[]'));
     } catch {
@@ -121,7 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const title = String(formData.get('title') ?? '').trim() || null;
     const isEnabled = formData.get('isActive') !== 'false';
 
-    let products: Array<{ productId: string; position: number }> = [];
+    let products = [];
     try {
       products = JSON.parse(String(formData.get('products') ?? '[]'));
     } catch {
@@ -175,23 +149,23 @@ export async function action({ request }: ActionFunctionArgs) {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export default function FbtPage() {
-  const { configs, shopProducts } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<{ error?: string; config?: FbtConfigRow; ok?: boolean }>();
+  const { configs, shopProducts } = useLoaderData();
+  const fetcher = useFetcher();
   const busy = fetcher.state !== 'idle';
 
   // ── Dialog state ────────────────────────────────────────────────────────────
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [editConfig, setEditConfig] = useState<FbtConfigRow | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editConfig, setEditConfig] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // ── Sheet form state ─────────────────────────────────────────────────────────
   const [sourceId, setSourceId] = useState('');
   const [sourceQ, setSourceQ] = useState('');
-  const [related, setRelated] = useState<ShopProduct[]>([]);
+  const [related, setRelated] = useState([]);
   const [relatedQ, setRelatedQ] = useState('');
-  const [discountType, setDiscountType] = useState<DiscountType>('none');
+  const [discountType, setDiscountType] = useState('none');
   const [discountValue, setDiscountValue] = useState('');
-  const [locations, setLocations] = useState<string[]>(['product_page']);
+  const [locations, setLocations] = useState(['product_page']);
   const [isActive, setIsActive] = useState(true);
 
   // Close dialogs on successful mutation
@@ -219,14 +193,14 @@ export default function FbtPage() {
     setSheetOpen(true);
   }
 
-  function openEdit(cfg: FbtConfigRow) {
+  function openEdit(cfg) {
     setEditConfig(cfg);
     setSourceId(cfg.productId);
     setSourceQ('');
     setRelated(
       cfg.products
         .map((p) => shopProducts.find((sp) => sp.id === p.productId))
-        .filter((p): p is ShopProduct => Boolean(p)),
+        .filter((p) => Boolean(p)),
     );
     setRelatedQ('');
     setDiscountType('none');
@@ -257,7 +231,7 @@ export default function FbtPage() {
     fetcher.submit(fd, { method: 'POST' });
   }
 
-  function handleToggle(configId: string) {
+  function handleToggle(configId) {
     const fd = new FormData();
     fd.set('intent', 'toggle');
     fd.set('configId', configId);
@@ -272,13 +246,13 @@ export default function FbtPage() {
     fetcher.submit(fd, { method: 'POST' });
   }
 
-  function addRelated(p: ShopProduct) {
+  function addRelated(p) {
     if (related.length >= 3 || related.find((r) => r.id === p.id)) return;
     setRelated((prev) => [...prev, p]);
     setRelatedQ('');
   }
 
-  function toggleLocation(val: string) {
+  function toggleLocation(val) {
     setLocations((prev) =>
       prev.includes(val) ? prev.filter((l) => l !== val) : [...prev, val],
     );
@@ -562,7 +536,7 @@ export default function FbtPage() {
                 <select
                   className="BS_fbt-select"
                   value={discountType}
-                  onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+                  onChange={(e) => setDiscountType(e.target.value)}
                 >
                   <option value="none">None</option>
                   <option value="percentage">Percentage</option>

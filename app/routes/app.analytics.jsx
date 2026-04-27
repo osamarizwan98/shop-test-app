@@ -1,5 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import { useState, useEffect } from 'react';
 import { useLoaderData, Link } from 'react-router';
 import {
   AreaChart,
@@ -20,7 +19,7 @@ export const links = () => [{ rel: 'stylesheet', href: analyticsStyles }];
 
 // ── Server helpers ─────────────────────────────────────────────────────────────
 
-function getPeriodStart(period: string): Date {
+function getPeriodStart(period) {
   const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
   const since = new Date();
   since.setDate(since.getDate() - days);
@@ -28,7 +27,7 @@ function getPeriodStart(period: string): Date {
   return since;
 }
 
-async function getAnalyticsSummary(shop: string, since: Date) {
+async function getAnalyticsSummary(shop, since) {
   const [revenueAgg, savingsAgg, viewCount, purchaseCount] = await Promise.all([
     prisma.analyticsEvent.aggregate({
       where: { shopDomain: shop, event: 'bundle_purchased', timestamp: { gte: since } },
@@ -53,18 +52,8 @@ async function getAnalyticsSummary(shop: string, since: Date) {
   return { totalRevenue, totalSavings, conversionRate, viewCount, purchaseCount };
 }
 
-export type TopBundle = {
-  rank: number;
-  bundleId: string | null;
-  title: string;
-  revenue: number;
-  conversions: number;
-  convRate: number;
-};
-
-async function getTopBundles(shop: string, since: Date, limit: number): Promise<TopBundle[]> {
-  // as unknown as — Prisma groupBy loses inference with orderBy:{ _sum }
-  const purchaseGroups = (await prisma.analyticsEvent.groupBy({
+async function getTopBundles(shop, since, limit) {
+  const purchaseGroups = await prisma.analyticsEvent.groupBy({
     by: ['bundleId'],
     where: {
       shopDomain: shop,
@@ -76,12 +65,12 @@ async function getTopBundles(shop: string, since: Date, limit: number): Promise<
     _count: { id: true },
     orderBy: { _sum: { revenue: 'desc' } },
     take: limit,
-  })) as unknown as Array<{ bundleId: string | null; _sum: { revenue: number | null }; _count: { id: number } }>;
+  });
 
-  const bundleIds = purchaseGroups.map((r) => r.bundleId).filter(Boolean) as string[];
+  const bundleIds = purchaseGroups.map((r) => r.bundleId).filter(Boolean);
   if (bundleIds.length === 0) return [];
 
-  const viewGroups = (await prisma.analyticsEvent.groupBy({
+  const viewGroups = await prisma.analyticsEvent.groupBy({
     by: ['bundleId'],
     where: {
       shopDomain: shop,
@@ -90,15 +79,15 @@ async function getTopBundles(shop: string, since: Date, limit: number): Promise<
       bundleId: { in: bundleIds },
     },
     _count: { id: true },
-  })) as unknown as Array<{ bundleId: string | null; _count: { id: number } }>;
+  });
 
-  const bundles = (await prisma.bundle.findMany({
+  const bundles = await prisma.bundle.findMany({
     where: { id: { in: bundleIds } },
     select: { id: true, title: true },
-  })) as Array<{ id: string; title: string }>;
+  });
 
-  const titleMap = new Map<string, string>(bundles.map((b) => [b.id, b.title]));
-  const viewMap = new Map<string | null, number>(viewGroups.map((v) => [v.bundleId, v._count.id]));
+  const titleMap = new Map(bundles.map((b) => [b.id, b.title]));
+  const viewMap = new Map(viewGroups.map((v) => [v.bundleId, v._count.id]));
 
   return purchaseGroups.map((row, i) => {
     const conversions = row._count.id;
@@ -106,7 +95,7 @@ async function getTopBundles(shop: string, since: Date, limit: number): Promise<
     return {
       rank: i + 1,
       bundleId: row.bundleId,
-      title: titleMap.get(row.bundleId!) ?? 'Unknown Bundle',
+      title: titleMap.get(row.bundleId) ?? 'Unknown Bundle',
       revenue: row._sum.revenue ?? 0,
       conversions,
       convRate: views > 0 ? (conversions / views) * 100 : 0,
@@ -114,7 +103,7 @@ async function getTopBundles(shop: string, since: Date, limit: number): Promise<
   });
 }
 
-async function getChartData(shop: string, since: Date) {
+async function getChartData(shop, since) {
   const events = await prisma.analyticsEvent.findMany({
     where: { shopDomain: shop, event: 'bundle_purchased', timestamp: { gte: since } },
     select: { timestamp: true, revenue: true },
@@ -122,7 +111,7 @@ async function getChartData(shop: string, since: Date) {
   });
 
   // Group by calendar day in JS — avoids SQLite date-function quirks
-  const byDay = new Map<string, number>();
+  const byDay = new Map();
   for (const e of events) {
     const day = e.timestamp.toISOString().slice(0, 10);
     byDay.set(day, (byDay.get(day) ?? 0) + (e.revenue ?? 0));
@@ -131,7 +120,7 @@ async function getChartData(shop: string, since: Date) {
   return Array.from(byDay.entries()).map(([date, revenue]) => ({ date, revenue }));
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const period = url.searchParams.get('period') ?? '30d';
@@ -146,7 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return { summary, topBundles, chartData, period };
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request }) {
   const { session } = await authenticate.admin(request);
   const { events } = await request.json();
 
@@ -155,16 +144,16 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   await prisma.analyticsEvent.createMany({
-    data: events.map((e: Record<string, unknown>) => ({
+    data: events.map((e) => ({
       shopDomain: session.shop,
       event: String(e.event ?? ''),
-      bundleId: (e.bundleId as string) ?? null,
-      sessionId: (e.sessionId as string) ?? null,
-      orderId: (e.orderId as string) ?? null,
+      bundleId: e.bundleId ?? null,
+      sessionId: e.sessionId ?? null,
+      orderId: e.orderId ?? null,
       revenue: e.revenue != null ? Number(e.revenue) : null,
       discountAmount: e.discountAmount != null ? Number(e.discountAmount) : null,
       metadata: e.metadata ?? null,
-      timestamp: e.timestamp ? new Date(e.timestamp as string) : undefined,
+      timestamp: e.timestamp ? new Date(e.timestamp) : undefined,
     })),
     skipDuplicates: true,
   });
@@ -179,15 +168,15 @@ const CHART_COLORS = {
   clicks:   'var(--secondary)',
   warnings: 'var(--accent)',
   error:    'var(--error)',
-} as const;
+};
 
 const PERIOD_OPTIONS = [
   { value: '7d', label: '7 Days' },
   { value: '30d', label: '30 Days' },
   { value: '90d', label: '90 Days' },
-] as const;
+];
 
-function PeriodSelector({ period }: { period: string }) {
+function PeriodSelector({ period }) {
   return (
     <div className="BS_period-tabs">
       {PERIOD_OPTIONS.map((opt) => (
@@ -203,7 +192,7 @@ function PeriodSelector({ period }: { period: string }) {
   );
 }
 
-function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiCard({ label, value, sub }) {
   return (
     <div className="BS_kpi-card">
       <p className="BS_kpi-label">{label}</p>
@@ -215,14 +204,14 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 
 // Renders nothing on SSR; swaps in children after mount to avoid recharts
 // calling browser APIs (ResizeObserver) during server rendering.
-function ClientOnly({ height, children }: { height: number; children: ReactNode }) {
+function ClientOnly({ height, children }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return <div style={{ height }} />;
   return <>{children}</>;
 }
 
-function RevenueChart({ data }: { data: { date: string; revenue: number }[] }) {
+function RevenueChart({ data }) {
   return (
     <ClientOnly height={220}>
       <ResponsiveContainer width="100%" height={220}>
@@ -241,7 +230,7 @@ function RevenueChart({ data }: { data: { date: string; revenue: number }[] }) {
             axisLine={false}
           />
           <YAxis
-            tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+            tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
             tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
             tickLine={false}
             axisLine={false}
@@ -264,7 +253,7 @@ function RevenueChart({ data }: { data: { date: string; revenue: number }[] }) {
   );
 }
 
-function BundleLeaderboard({ bundles }: { bundles: TopBundle[] }) {
+function BundleLeaderboard({ bundles }) {
   return (
     <table className="BS_leaderboard-table">
       <thead>
@@ -291,7 +280,7 @@ function BundleLeaderboard({ bundles }: { bundles: TopBundle[] }) {
   );
 }
 
-function AovChart({ bundleAov }: { bundleAov: number }) {
+function AovChart({ bundleAov }) {
   const data = [
     { name: 'Bundle', aov: bundleAov, fill: CHART_COLORS.revenue },
     { name: 'Regular', aov: 0, fill: CHART_COLORS.clicks },
@@ -309,7 +298,7 @@ function AovChart({ bundleAov }: { bundleAov: number }) {
             axisLine={false}
           />
           <YAxis
-            tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+            tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
             tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
             tickLine={false}
             axisLine={false}
@@ -343,7 +332,7 @@ function EmptyState() {
 }
 
 export default function AnalyticsDashboard() {
-  const { summary, topBundles, chartData, period } = useLoaderData<typeof loader>();
+  const { summary, topBundles, chartData, period } = useLoaderData();
   const isEmpty = summary.totalRevenue === 0 && topBundles.length === 0;
   const bundleAov =
     summary.purchaseCount > 0 ? summary.totalRevenue / summary.purchaseCount : 0;

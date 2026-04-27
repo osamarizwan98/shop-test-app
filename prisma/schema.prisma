@@ -142,14 +142,16 @@ model OnboardingState {
 }
 
 model FbtConfig {
-  id          String       @id @default(cuid())
-  shop        String
-  productId   String
-  title       String?
-  isEnabled   Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  products    FbtProduct[]
+  id            String       @id @default(cuid())
+  shop          String
+  productId     String
+  title         String?
+  isEnabled     Boolean      @default(true)
+  discountType  String       @default("none")
+  discountValue Float        @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  products      FbtProduct[]
 
   @@unique([shop, productId])
   @@index([shop])
@@ -159,11 +161,72 @@ model FbtProduct {
   id          String    @id @default(cuid())
   fbtConfigId String
   productId   String
+  variantId   String?
+  title       String?
+  price       Float     @default(0)
+  imageUrl    String?
   position    Int       @default(0)
   createdAt   DateTime  @default(now())
   fbtConfig   FbtConfig @relation(fields: [fbtConfigId], references: [id], onDelete: Cascade)
 
   @@index([fbtConfigId])
+}
+
+model TieredDiscount {
+  id                String               @id @default(cuid())
+  shop              String
+  title             String
+  productScope      String               @default("all")
+  productIds        Json                 @default("[]")
+  collectionIds     Json                 @default("[]")
+  active            Boolean              @default(false)
+  shopifyDiscountId String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  tiers             TieredDiscountTier[]
+
+  @@index([shop])
+}
+
+model TieredDiscountTier {
+  id               String         @id @default(cuid())
+  tieredDiscountId String
+  minimumQuantity  Int
+  discountType     String
+  discountValue    Float
+  position         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  tieredDiscount   TieredDiscount @relation(fields: [tieredDiscountId], references: [id], onDelete: Cascade)
+
+  @@index([tieredDiscountId])
+}
+
+model ProgressBarConfig {
+  id             String                 @id @default(cuid())
+  shopDomain     String                 @unique
+  activeOnCart   Boolean                @default(true)
+  activeOnDrawer Boolean                @default(true)
+  animationStyle String                 @default("smooth")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  milestones     ProgressBarMilestone[]
+
+  @@index([shopDomain])
+}
+
+model ProgressBarMilestone {
+  id          String            @id @default(cuid())
+  configId    String
+  type        String
+  threshold   Float
+  rewardValue Float             @default(0)
+  rewardLabel String            @default("")
+  message     String            @default("")
+  position    Int               @default(0)
+  createdAt   DateTime          @default(now())
+  config      ProgressBarConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
 }
 
 model AnalyticsEvent {
